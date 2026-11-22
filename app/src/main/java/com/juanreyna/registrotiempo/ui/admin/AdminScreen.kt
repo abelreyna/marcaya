@@ -28,6 +28,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.filled.ExpandLess
@@ -520,7 +521,11 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
     var buscando by remember { mutableStateOf(false) }
     val camara = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(centro, 17f) }
     val marcador = rememberMarkerState(position = centro)
-    LaunchedEffect(centro) { marcador.position = centro }
+    LaunchedEffect(centro) { if (marcador.position != centro) marcador.position = centro }
+    // Al arrastrar el pin, el centro (y el círculo de cobertura) lo siguen en tiempo real.
+    LaunchedEffect(marcador) {
+        snapshotFlow { marcador.position }.collect { if (it != centro) centro = it }
+    }
 
     fun irAMiUbicacion(fijarCentro: Boolean) {
         if (buscando) return
@@ -577,7 +582,7 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
             uiSettings = MapUiSettings(myLocationButtonEnabled = permiso, zoomControlsEnabled = false),
             onMapClick = { centro = it }
         ) {
-            Marker(state = marcador, title = nombre)
+            Marker(state = marcador, title = nombre, snippet = "Mantén presionado y arrastra para moverlo", draggable = true)
             Circle(center = centro, radius = radio.toDouble(), strokeColor = VerdeEsmeralda, fillColor = VerdeEsmeralda.copy(alpha = 0.25f), strokeWidth = 4f)
         }
         // Botón para ampliar / restaurar el mapa (esquina superior izquierda; la derecha es de "Mi ubicación")
@@ -639,7 +644,7 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
                 listOf(20f, 50f, 100f, 150f).forEach { r -> ChipFiltro("${r.toInt()} m", radio.toInt() == r.toInt()) { radio = r } }
             }
             OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre de la sede u obra") }, singleLine = true, shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth())
-            Text("Toca el mapa para fijar el centro · %.6f, %.6f".format(centro.latitude, centro.longitude), style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            Text("Mantén presionado el pin rojo y arrástralo, o toca el mapa, para fijar el centro · %.6f, %.6f".format(centro.latitude, centro.longitude), style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
             BotonPillContorno(if (buscando) "Buscando ubicación…" else "Usar mi ubicación actual", {
                 if (permiso) irAMiUbicacion(fijarCentro = true)
                 else pedirPermiso.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
