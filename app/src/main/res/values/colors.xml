@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="azul_marino">#FF13294B</color>
+    <color name="verde_esmeralda">#FF0F8B6D</color>
+    <color name="fondo_claro">#FFF5F7FA</color>
+    <color name="blanco">#FFFFFFFF</color>
+</resources>

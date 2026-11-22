@@ -1,0 +1,135 @@
+rules_version = '2';
+// Registro de Tiempo de Personal — Reglas de seguridad de Cloud Firestore
+// Autor: Juan Abel Reyna Gonzales — Ingeniero Industrial
+//
+// Basadas en CLAUDE.md §6.2.3, endurecidas para:
+//  - impedir que un usuario cree su perfil como ADMINISTRADOR de otra empresa,
+//  - validar el Código de Administrador al vincular colaboradores,
+//  - aplicar el rate limiting de 60 s entre marcajes (campo usuarios.ultimoMarcaje),
+//  - permitir Inicio/Fin de Descanso sin rostro (solo Ingreso/Salida lo exigen),
+//  - cubrir las colecciones codigos, justificaciones y alertas.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    }
+
+    function getUserData() {
+      return get(userPath()).data;
+    }
+
+    function isAdminOfCompany(companyAdminId) {
+      return isAuthenticated()
+        && getUserData().rol == 'ADMINISTRADOR'
+        && getUserData().adminId == companyAdminId;
+    }
+
+    // ---------- Usuarios y perfiles ----------
+    match /usuarios/{userId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isAdminOfCompany(resource.data.adminId)
+      );
+
+      // Admin: solo puede ser administrador de su propia empresa (adminId == su uid).
+      // Colaborador: el adminId debe coincidir con el Código de Administrador ingresado
+      // y no puede fijarse tarifas ni régimen.
+      allow create: if isAuthenticated() && request.auth.uid == userId && (
+        (request.resource.data.rol == 'ADMINISTRADOR'
+          && request.resource.data.adminId == request.auth.uid)
+        ||
+        (request.resource.data.rol == 'COLABORADOR'
+          && exists(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo))
+          && get(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo)).data.adminId
+               == request.resource.data.adminId
+          && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje']))
+      );
+
+      allow update: if isAuthenticated() && (
+        isAdminOfCompany(resource.data.adminId) ||
+        (request.auth.uid == userId
+          && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['rol', 'adminId', 'tarifaPorHora', 'regimenLaboral', 'configPago', 'activo'])
+          // ultimoMarcaje solo puede fijarse a la hora del servidor
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ultimoMarcaje'])
+              || request.resource.data.ultimoMarcaje == request.time))
+      );
+
+      allow delete: if false;
+    }
+
+    // ---------- Códigos de Administrador (ADM-XXXX-X) ----------
+    match /codigos/{codigo} {
+      allow get: if isAuthenticated();
+      allow list: if false; // evita enumerar códigos
+      allow create: if isAuthenticated()
+        && request.resource.data.adminId == request.auth.uid
+        && codigo.matches('ADM-[0-9]{4}-[A-Z]');
+      allow update, delete: if false;
+    }
+
+    // ---------- Empresas, geocercas y plan (FREE / VIP) ----------
+    match /empresas/{adminId} {
+      allow read: if isAuthenticated() && getUserData().adminId == adminId;
+      allow create: if isAuthenticated() && request.auth.uid == adminId
+        && request.resource.data.plan == 'FREE';
+      // El Admin no puede auto-asignarse plan VIP desde el cliente
+      allow update: if isAuthenticated() && request.auth.uid == adminId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'vipExpiraEn', 'fechaCreacion', 'codigoAdministrador']);
+      allow delete: if false;
+    }
+
+    // ---------- Marcajes (inmutables para el colaborador) ----------
+    match /marcajes/{marcajeId} {
+      allow read: if isAuthenticated() && (
+        resource.data.colaboradorId == request.auth.uid ||
+        isAdminOfCompany(resource.data.adminId)
+      );
+
+      allow create: if isAuthenticated()
+        && request.resource.data.colaboradorId == request.auth.uid
+        && request.resource.data.adminId == getUserData().adminId
+        && getUserData().activo != false
+        && request.resource.data.timestamp == request.time
+        && request.resource.data.tipo in ['INGRESO', 'INICIO_DESCANSO', 'FIN_DESCANSO', 'SALIDA']
+        && (request.resource.data.validacionFacial == true
+            || request.resource.data.tipo in ['INICIO_DESCANSO', 'FIN_DESCANSO'])
+        // Rate limiting: el mismo lote debe actualizar ultimoMarcaje y han pasado ≥ 60 s del anterior
+        && getAfter(userPath()).data.ultimoMarcaje == request.time
+        && (!('ultimoMarcaje' in getUserData())
+            || request.time > getUserData().ultimoMarcaje + duration.value(60, 's'));
+
+      allow update: if isAdminOfCompany(resource.data.adminId);
+      allow delete: if false;
+    }
+
+    // ---------- Justificaciones de incidencias ----------
+    match /justificaciones/{id} {
+      allow read: if isAuthenticated() && (
+        resource.data.colaboradorId == request.auth.uid ||
+        isAdminOfCompany(resource.data.adminId)
+      );
+      allow create: if isAuthenticated()
+        && request.resource.data.colaboradorId == request.auth.uid
+        && request.resource.data.adminId == getUserData().adminId
+        && request.resource.data.estado == 'PENDIENTE';
+      allow update: if isAdminOfCompany(resource.data.adminId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'resuelto']);
+      allow delete: if false;
+    }
+
+    // ---------- Alertas antifraude / geocerca ----------
+    match /alertas/{id} {
+      allow read: if isAdminOfCompany(resource.data.adminId);
+      allow create: if isAuthenticated()
+        && request.resource.data.colaboradorId == request.auth.uid
+        && request.resource.data.adminId == getUserData().adminId;
+      allow update, delete: if false;
+    }
+  }
+}

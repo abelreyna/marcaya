@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Isotipo: reloj de precisión sobre mapa con pin GPS y check de verificación (según capturas) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Mapa plegado -->
+    <path android:fillColor="#FF2E7D8C" android:pathData="M44,40L60,34L76,40L90,34L90,82L76,88L60,82L44,88Z" />
+    <path android:fillColor="#FF8FD3B8" android:pathData="M60,34L76,40L76,88L60,82Z" />
+    <path android:fillColor="#FFE3F2EC" android:pathData="M64,52C68,48 72,56 76,52L76,62C72,66 68,58 64,62Z" />
+    <!-- Pin GPS -->
+    <path android:fillColor="#FF13294B" android:pathData="M80,46C76.7,46 74,48.7 74,52C74,56.5 80,63 80,63C80,63 86,56.5 86,52C86,48.7 83.3,46 80,46Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M80,52m-2.2,0a2.2,2.2 0,1 1,4.4 0a2.2,2.2 0,1 1,-4.4 0" />
+    <!-- Reloj -->
+    <path android:fillColor="#FF13294B" android:pathData="M42,52m-26,0a26,26 0,1 1,52 0a26,26 0,1 1,-52 0" />
+    <path android:fillColor="#FF4FA3E0" android:pathData="M42,52m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M42,52m-19,0a19,19 0,1 1,38 0a19,19 0,1 1,-38 0" />
+    <path android:strokeColor="#FF13294B" android:strokeWidth="2" android:pathData="M42,35L42,38M42,66L42,69M25,52L28,52M56,52L59,52" />
+    <path android:strokeColor="#FF13294B" android:strokeWidth="3.2" android:strokeLineCap="round"
+        android:pathData="M42,52L42,40M42,52L51,52" />
+    <path android:fillColor="#FF13294B" android:pathData="M42,52m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0" />
+    <!-- Check de verificación -->
+    <path android:fillColor="#FF1E8E50" android:pathData="M64,74m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="3.4" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M58.5,74.5L62.5,78.5L70,70.5" />
+</vector>

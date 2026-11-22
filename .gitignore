@@ -1,0 +1,19 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+.kotlin/
+# Credenciales y firmas: nunca subir a GitHub
+app/google-services.json
+*.jks
+*.keystore
+keystore.properties
+
+# Copia local de las capturas (versionadas en docs/screenshots)
+/capturas_app_registro_tiempo_personal/
