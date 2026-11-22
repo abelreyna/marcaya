@@ -22,7 +22,11 @@ import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -531,10 +535,15 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
         }
     }
 
+    // Altura de la hoja inferior: el mapa la usa como relleno para centrar el pin en la zona visible.
+    val densidad = LocalDensity.current
+    var alturaHoja by remember { mutableStateOf(0.dp) }
+
     Box(Modifier.fillMaxSize()) {
         GoogleMap(
             Modifier.fillMaxSize(),
             cameraPositionState = camara,
+            contentPadding = PaddingValues(bottom = alturaHoja),
             properties = MapProperties(isMyLocationEnabled = permiso),
             uiSettings = MapUiSettings(myLocationButtonEnabled = permiso, zoomControlsEnabled = false),
             onMapClick = { centro = it }
@@ -545,14 +554,21 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
         // Hoja inferior de configuración
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .onSizeChanged { alturaHoja = with(densidad) { it.height.toDp() } }
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(Color.White).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(Modifier.align(Alignment.CenterHorizontally).size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(Borde))
             Text("Radio de Cobertura: ${radio.toInt()} metros", fontWeight = FontWeight.SemiBold)
-            Slider(radio, { radio = it }, valueRange = 20f..500f, colors = SliderDefaults.colors(thumbColor = Teal, activeTrackColor = Teal))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(50f, 100f, 150f).forEach { r -> ChipFiltro("${r.toInt()} m", radio.toInt() == r.toInt()) { radio = r } }
+            Slider(radio, { radio = it }, valueRange = 5f..500f, colors = SliderDefaults.colors(thumbColor = Teal, activeTrackColor = Teal))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(5f, 10f, 50f, 100f, 150f).forEach { r -> ChipFiltro("${r.toInt()} m", radio.toInt() == r.toInt()) { radio = r } }
+            }
+            if (radio < 20f) {
+                Text(
+                    "Radios menores a 20 m pueden rechazar marcajes válidos: el GPS del celular suele tener un margen de error de 5 a 15 m.",
+                    style = MaterialTheme.typography.bodySmall, color = Ambar
+                )
             }
             OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre de la sede u obra") }, singleLine = true, shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth())
             Text("Toca el mapa para fijar el centro · %.6f, %.6f".format(centro.latitude, centro.longitude), style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
