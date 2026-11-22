@@ -490,6 +490,9 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
     )
 }
 
+/** Radio mínimo de la geocerca: por debajo de 20 m el margen de error del GPS (5–15 m) rechaza marcajes válidos. */
+private const val RADIO_MINIMO = 20f
+
 /** Lee la ubicación actual del celular (alta precisión, con respaldo a la última conocida). */
 @SuppressLint("MissingPermission")
 private suspend fun ubicacionActual(context: Context): LatLng? = runCatching {
@@ -511,7 +514,8 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
     val sinConfigurar = actual.latitud == Geocerca().latitud && actual.longitud == Geocerca().longitud
     var nombre by remember(actual) { mutableStateOf(actual.nombre) }
     var centro by remember(actual) { mutableStateOf(LatLng(actual.latitud, actual.longitud)) }
-    var radio by remember(actual) { mutableStateOf(actual.radioMetros.toFloat()) }
+    // Zonas guardadas antes con radios de 5 o 10 m se ajustan al nuevo mínimo.
+    var radio by remember(actual) { mutableStateOf(actual.radioMetros.toFloat().coerceAtLeast(RADIO_MINIMO)) }
     var permiso by remember { mutableStateOf(tienePermisoUbicacion(context)) }
     var buscando by remember { mutableStateOf(false) }
     val camara = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(centro, 17f) }
@@ -630,15 +634,9 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
                 BotonPill("Guardar Zona", { alGuardar(Geocerca(nombre.trim(), centro.latitude, centro.longitude, radio.toDouble())) }, alto = 48.dp)
             } else {
             Text("Radio de Cobertura: ${radio.toInt()} metros", fontWeight = FontWeight.SemiBold)
-            Slider(radio, { radio = it }, valueRange = 5f..500f, colors = SliderDefaults.colors(thumbColor = Teal, activeTrackColor = Teal))
+            Slider(radio, { radio = it }, valueRange = RADIO_MINIMO..500f, colors = SliderDefaults.colors(thumbColor = Teal, activeTrackColor = Teal))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(5f, 10f, 50f, 100f, 150f).forEach { r -> ChipFiltro("${r.toInt()} m", radio.toInt() == r.toInt()) { radio = r } }
-            }
-            if (radio < 20f) {
-                Text(
-                    "Radios menores a 20 m pueden rechazar marcajes válidos: el GPS del celular suele tener un margen de error de 5 a 15 m.",
-                    style = MaterialTheme.typography.bodySmall, color = Ambar
-                )
+                listOf(20f, 50f, 100f, 150f).forEach { r -> ChipFiltro("${r.toInt()} m", radio.toInt() == r.toInt()) { radio = r } }
             }
             OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre de la sede u obra") }, singleLine = true, shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth())
             Text("Toca el mapa para fijar el centro · %.6f, %.6f".format(centro.latitude, centro.longitude), style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
