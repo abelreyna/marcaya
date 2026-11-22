@@ -7,6 +7,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -76,6 +80,7 @@ fun Isotipo(tamano: Dp = 96.dp) {
 /**
  * Marco común de las capturas: cabecera azul marino y una hoja clara con esquinas superiores redondeadas.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MarcoPantalla(
     titulo: String,
@@ -87,7 +92,10 @@ fun MarcoPantalla(
     pie: @Composable (() -> Unit)? = null,
     contenido: @Composable ColumnScope.() -> Unit
 ) {
-    Column(Modifier.fillMaxSize().background(DegradadoMarino)) {
+    // Con edge-to-edge Android no redimensiona la ventana al abrir el teclado: imePadding sube todo el
+    // contenido por encima del teclado, y la barra inferior se oculta para dejar más espacio al formulario.
+    val tecladoVisible = WindowInsets.isImeVisible
+    Column(Modifier.fillMaxSize().background(DegradadoMarino).imePadding()) {
         Row(
             Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -107,7 +115,7 @@ fun MarcoPantalla(
                 .background(FondoClaro),
             content = contenido
         )
-        pie?.invoke()
+        if (!tecladoVisible) pie?.invoke()
     }
 }
 

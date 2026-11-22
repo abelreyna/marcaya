@@ -35,7 +35,9 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Box
@@ -573,7 +575,9 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
         recentrar = false // al final: cambiar esta clave antes cancelaría la animación
     }
 
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Con el teclado abierto el espacio se reduce: la hoja no pasa de esta altura y se desplaza por dentro.
+        val alturaMaxHoja = maxHeight
         GoogleMap(
             Modifier.fillMaxSize(),
             cameraPositionState = camara,
@@ -600,11 +604,14 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
         // Hoja inferior de configuración (compacta cuando el mapa está ampliado)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .heightIn(max = alturaMaxHoja)
                 .onSizeChanged { alturaHoja = with(densidad) { it.height.toDp() } }
                 // Mientras se arrastra hacia abajo, la hoja acompaña al dedo.
                 .graphicsLayer { translationY = arrastre.coerceAtLeast(0f) }
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(Color.White)
-                .animateContentSize().padding(16.dp),
+                .animateContentSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Asa de la hoja: tocar alterna; arrastrar hacia abajo amplía el mapa y hacia arriba lo reduce.
