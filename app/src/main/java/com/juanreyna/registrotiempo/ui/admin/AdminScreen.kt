@@ -1,5 +1,8 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import androidx.compose.ui.text.style.TextOverflow
+import kotlin.math.roundToLong
+import com.juanreyna.registrotiempo.domain.calc.ResumenColaborador
 import com.juanreyna.registrotiempo.domain.model.Horario
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Checkbox
@@ -793,18 +796,9 @@ private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {
             item { TituloSeccion("Reporte de Planilla — ${Fechas.etiquetaMes(mes)}") }
             item {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).border(1.dp, Borde, RoundedCornerShape(16.dp))) {
-                    FilaTabla(listOf("Empleado", "Horas", "Bruto", "Retenc.", "Neto"), encabezado = true)
                     r.forEachIndexed { i, c ->
                         if (i > 0) HorizontalDivider(color = Borde)
-                        FilaTabla(
-                            listOf(
-                                c.usuario.nombre.substringBefore(" ") + " " + c.usuario.nombre.substringAfter(" ", "").take(1),
-                                "%.1f".format(c.horasTotales),
-                                "%,.0f".format(c.boleta.totalIngresos),
-                                "-%,.0f".format(c.boleta.totalDescuentos),
-                                "%,.0f".format(c.boleta.netoAPagar)
-                            )
-                        )
+                        FilaPlanilla(c, mon)
                     }
                     HorizontalDivider(color = Borde)
                     Column(Modifier.background(TealClaro).padding(12.dp)) {
@@ -819,20 +813,29 @@ private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {
     }
 }
 
+/** Una fila del reporte de planilla: nombre y horas arriba; bruto, retenciones y neto debajo. */
 @Composable
-private fun FilaTabla(celdas: List<String>, encabezado: Boolean = false) {
-    val pesos = listOf(2.2f, 1f, 1.2f, 1.2f, 1.2f)
-    Row(
-        Modifier.fillMaxWidth().background(if (encabezado) Color(0xFFEEF2F7) else Color.White).padding(horizontal = 12.dp, vertical = 10.dp)
-    ) {
-        celdas.forEachIndexed { i, c ->
-            Text(
-                c, Modifier.weight(pesos[i]), maxLines = 1,
-                textAlign = if (i == 0) TextAlign.Start else TextAlign.End,
-                style = if (encabezado) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
-                fontWeight = if (encabezado || i == 4) FontWeight.Bold else FontWeight.Normal,
-                color = if (i == 3 && !encabezado) Rojo else Color.Unspecified
-            )
+private fun FilaPlanilla(c: ResumenColaborador, mon: String) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(c.usuario.nombre, 36.dp, foto = c.usuario.foto)
+            Spacer(Modifier.width(10.dp))
+            Text(c.usuario.nombre, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(Fechas.duracion((c.horasTotales * 60).roundToLong()), style = MaterialTheme.typography.bodyMedium, color = TextoSecundario)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CeldaMonto("Bruto", dinero(mon, c.boleta.totalIngresos), Modifier.weight(1f))
+            CeldaMonto("Retenciones", "-" + dinero(mon, c.boleta.totalDescuentos), Modifier.weight(1f), Rojo)
+            CeldaMonto("Neto", dinero(mon, c.boleta.netoAPagar), Modifier.weight(1f), AzulMarino, negrita = true)
         }
     }
 }
+
+@Composable
+private fun CeldaMonto(etiqueta: String, valor: String, modifier: Modifier, color: Color = Color.Unspecified, negrita: Boolean = false) {
+    Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFFF3F6FA)).padding(horizontal = 8.dp, vertical = 6.dp)) {
+        Text(etiqueta, style = MaterialTheme.typography.labelSmall, color = TextoSecundario, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(valor, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = if (negrita) FontWeight.Bold else FontWeight.Medium, maxLines = 1, softWrap = false)
+    }
+}
+

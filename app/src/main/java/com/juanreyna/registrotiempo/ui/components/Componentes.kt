@@ -1,5 +1,8 @@
 package com.juanreyna.registrotiempo.ui.components
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -111,8 +114,11 @@ fun MarcoPantalla(
             else Spacer(Modifier.width(8.dp))
             if (avatar != null) { Avatar(avatar, 44.dp, foto = avatarFoto, alTocar = alTocarAvatar); Spacer(Modifier.width(12.dp)) }
             Column(Modifier.weight(1f), horizontalAlignment = if (centrado) Alignment.CenterHorizontally else Alignment.Start) {
-                Text(titulo, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                if (subtitulo != null) Text(subtitulo, color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                Text(
+                    titulo, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = MaterialTheme.typography.titleLarge.fontSize * 1.15f
+                )
+                if (subtitulo != null) Text(subtitulo, color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.CenterVertically, content = acciones)
         }
@@ -202,11 +208,17 @@ fun BotonPill(
     alto: Dp = 52.dp
 ) {
     Button(
-        onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth().height(alto),
-        shape = RoundedCornerShape(50), colors = ButtonDefaults.buttonColors(containerColor = color)
+        onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth().heightIn(min = alto),
+        shape = RoundedCornerShape(if (icono != null) 28.dp else 50.dp), colors = ButtonDefaults.buttonColors(containerColor = color),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
     ) {
-        if (icono != null) { Icon(icono, null); Spacer(Modifier.width(8.dp)) }
-        Text(texto, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+        if (icono != null) { Icon(icono, null); Spacer(Modifier.width(12.dp)) }
+        Text(
+            texto, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium,
+            textAlign = if (icono != null) TextAlign.Start else TextAlign.Center,
+            // fill = false: un texto corto queda centrado junto al icono; uno largo ocupa el ancho y pasa a 2 líneas
+            modifier = if (icono != null) Modifier.weight(1f, fill = false) else Modifier
+        )
     }
 }
 
@@ -221,12 +233,12 @@ fun BotonPillContorno(
     extra: String? = null
 ) {
     OutlinedButton(
-        onClick = onClick, enabled = enabled, modifier = modifier.height(46.dp),
+        onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 46.dp),
         shape = RoundedCornerShape(50), border = BorderStroke(1.5.dp, if (enabled) color else Borde),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = color)
     ) {
         if (icono != null) { Icon(icono, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
-        Text(texto, fontWeight = FontWeight.SemiBold, modifier = if (extra != null) Modifier.weight(1f) else Modifier)
+        Text(texto, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = if (extra != null) Modifier.weight(1f) else Modifier)
         if (extra != null) Text(extra, fontWeight = FontWeight.SemiBold)
     }
 }
