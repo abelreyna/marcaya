@@ -70,11 +70,16 @@ class PerfilViewModel @Inject constructor(
         }
     }
 
-    fun cambiarFoto(uri: Uri) {
+    fun cambiarFoto(uri: Uri, borrarAlTerminar: Boolean = false) {
         if (uid.isEmpty() || procesandoFoto.value) return
         viewModelScope.launch {
             procesandoFoto.value = true
-            val foto = withContext(Dispatchers.Default) { FotoPerfil.desdeUri(context, uri) }
+            val foto = withContext(Dispatchers.Default) {
+                FotoPerfil.desdeUri(context, uri).also {
+                    // La foto de cámara es temporal: se borra en cuanto se procesa
+                    if (borrarAlTerminar) runCatching { context.contentResolver.delete(uri, null, null) }
+                }
+            }
             if (foto == null) {
                 mensaje.value = "No se pudo leer la imagen. Prueba con otra foto."
             } else {

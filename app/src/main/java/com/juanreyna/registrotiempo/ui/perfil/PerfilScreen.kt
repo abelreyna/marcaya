@@ -1,5 +1,9 @@
 package com.juanreyna.registrotiempo.ui.perfil
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,20 +38,25 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.juanreyna.registrotiempo.domain.model.Rol
@@ -66,6 +76,8 @@ import com.juanreyna.registrotiempo.ui.theme.Rojo
 import com.juanreyna.registrotiempo.ui.theme.Teal
 import com.juanreyna.registrotiempo.ui.theme.TextoSecundario
 import com.juanreyna.registrotiempo.ui.theme.VerdeEsmeralda
+import kotlinx.coroutines.launch
+import java.io.File
 
 /** Mi Perfil: foto editable, datos personales editables e información básica de la cuenta. */
 @Composable
@@ -80,6 +92,40 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
         if (uri != null) vm.cambiarFoto(uri)
     }
     fun abrirGaleria() = elegirFoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+
+    // Cámara del dispositivo: la foto se escribe en caché (FileProvider), se procesa y se borra
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var uriCamara by rememberSaveable { mutableStateOf<String?>(null) }
+    var elegirOrigen by remember { mutableStateOf(false) }
+    val tomarFoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = uriCamara?.let(Uri::parse)
+        if (ok && uri != null) vm.cambiarFoto(uri, borrarAlTerminar = true)
+    }
+    fun lanzarCamara() {
+        val archivo = File(context.cacheDir, "fotos").apply { mkdirs() }.let { File(it, "perfil_camara.jpg") }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", archivo)
+        uriCamara = uri.toString()
+        try { tomarFoto.launch(uri) } catch (e: ActivityNotFoundException) {
+            scope.launch { snackbar.showSnackbar("No se encontró una app de cámara en el dispositivo") }
+        }
+    }
+    val pedirPermisoCamara = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
+        if (concedido) lanzarCamara()
+        else scope.launch { snackbar.showSnackbar("Se necesita permiso de cámara para tomar la foto") }
+    }
+    fun abrirCamara() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) lanzarCamara()
+        else pedirPermisoCamara.launch(Manifest.permission.CAMERA)
+    }
+
+    if (elegirOrigen) AlertDialog(
+        onDismissRequest = { elegirOrigen = false },
+        title = { Text("Foto de perfil") },
+        text = { Text("¿Quieres tomar una foto ahora o elegir una de tu galería?") },
+        confirmButton = { TextButton({ elegirOrigen = false; abrirCamara() }) { Text("Tomar foto") } },
+        dismissButton = { TextButton({ elegirOrigen = false; abrirGaleria() }) { Text("Galería") } }
+    )
 
     Box(Modifier.fillMaxSize()) {
         MarcoPantalla("Mi Perfil", subtitulo = "Foto y datos básicos", alVolver = alVolver) {
@@ -97,14 +143,14 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
             ) {
                 // Foto con insignia de cámara para cambiarla
                 Box(Modifier.padding(top = 8.dp)) {
-                    Avatar(u.nombre, 128.dp, foto = u.foto, alTocar = ::abrirGaleria)
+                    Avatar(u.nombre, 128.dp, foto = u.foto, alTocar = { if (!ui.procesandoFoto) elegirOrigen = true })
                     Box(
                         Modifier.align(Alignment.BottomEnd).size(40.dp).clip(CircleShape).background(Teal)
-                            .border(3.dp, Color.White, CircleShape).clickable(onClick = ::abrirGaleria),
+                            .border(3.dp, Color.White, CircleShape).clickable(enabled = !ui.procesandoFoto, onClick = ::abrirCamara),
                         contentAlignment = Alignment.Center
                     ) {
                         if (ui.procesandoFoto) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                        else Icon(Icons.Default.PhotoCamera, "Cambiar foto", tint = Color.White, modifier = Modifier.size(20.dp))
+                        else Icon(Icons.Default.PhotoCamera, "Tomar foto", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
                 Text(u.nombre.ifBlank { "Sin nombre" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = AzulMarino)
@@ -114,12 +160,18 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BotonPillContorno(
-                        if (u.foto.isBlank()) "Subir foto" else "Cambiar", ::abrirGaleria,
+                        "Cámara", ::abrirCamara,
+                        Modifier.weight(1f), color = Teal, enabled = !ui.procesandoFoto, icono = Icons.Default.PhotoCamera
+                    )
+                    BotonPillContorno(
+                        "Galería", ::abrirGaleria,
                         Modifier.weight(1f), color = Teal, enabled = !ui.procesandoFoto, icono = Icons.Default.PhotoLibrary
                     )
-                    if (u.foto.isNotBlank()) BotonPillContorno(
-                        "Quitar", vm::quitarFoto, Modifier.weight(1f), color = Rojo, enabled = !ui.procesandoFoto, icono = Icons.Default.Delete
-                    )
+                }
+                if (u.foto.isNotBlank()) TextButton(vm::quitarFoto, enabled = !ui.procesandoFoto) {
+                    Icon(Icons.Default.Delete, null, tint = Rojo, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("Quitar foto", color = Rojo)
                 }
 
                 Seccion("Datos personales", borde = Borde) {
