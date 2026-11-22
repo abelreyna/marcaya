@@ -1,7 +1,24 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.tasks.CancellationTokenSource
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -459,17 +476,69 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
     )
 }
 
+/** Lee la ubicación actual del celular (alta precisión, con respaldo a la última conocida). */
+@SuppressLint("MissingPermission")
+private suspend fun ubicacionActual(context: Context): LatLng? = runCatching {
+    val cliente = LocationServices.getFusedLocationProviderClient(context)
+    val loc = cliente.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token).await()
+        ?: cliente.lastLocation.await()
+    loc?.let { LatLng(it.latitude, it.longitude) }
+}.getOrNull()
+
+private fun tienePermisoUbicacion(context: Context) =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
 @Composable
 private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Una geocerca aún no configurada conserva la coordenada por defecto: se reemplaza por la ubicación real del celular.
+    val sinConfigurar = actual.latitud == Geocerca().latitud && actual.longitud == Geocerca().longitud
     var nombre by remember(actual) { mutableStateOf(actual.nombre) }
     var centro by remember(actual) { mutableStateOf(LatLng(actual.latitud, actual.longitud)) }
     var radio by remember(actual) { mutableStateOf(actual.radioMetros.toFloat()) }
+    var permiso by remember { mutableStateOf(tienePermisoUbicacion(context)) }
+    var buscando by remember { mutableStateOf(false) }
     val camara = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(centro, 17f) }
     val marcador = rememberMarkerState(position = centro)
     LaunchedEffect(centro) { marcador.position = centro }
 
+    fun irAMiUbicacion(fijarCentro: Boolean) {
+        if (buscando) return
+        buscando = true
+        scope.launch {
+            val aqui = ubicacionActual(context)
+            buscando = false
+            if (aqui == null) {
+                Toast.makeText(context, "No se pudo obtener tu ubicación. Activa el GPS e inténtalo de nuevo.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            if (fijarCentro) centro = aqui
+            camara.animate(CameraUpdateFactory.newLatLngZoom(aqui, 17f))
+        }
+    }
+
+    val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        permiso = r.values.any { it }
+        if (permiso) irAMiUbicacion(fijarCentro = sinConfigurar)
+    }
+    LaunchedEffect(actual) {
+        if (permiso) {
+            if (sinConfigurar) irAMiUbicacion(fijarCentro = true)
+        } else {
+            pedirPermiso.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
-        GoogleMap(Modifier.fillMaxSize(), cameraPositionState = camara, onMapClick = { centro = it }) {
+        GoogleMap(
+            Modifier.fillMaxSize(),
+            cameraPositionState = camara,
+            properties = MapProperties(isMyLocationEnabled = permiso),
+            uiSettings = MapUiSettings(myLocationButtonEnabled = permiso, zoomControlsEnabled = false),
+            onMapClick = { centro = it }
+        ) {
             Marker(state = marcador, title = nombre)
             Circle(center = centro, radius = radio.toDouble(), strokeColor = VerdeEsmeralda, fillColor = VerdeEsmeralda.copy(alpha = 0.25f), strokeWidth = 4f)
         }
@@ -487,6 +556,10 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
             }
             OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre de la sede u obra") }, singleLine = true, shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth())
             Text("Toca el mapa para fijar el centro · %.6f, %.6f".format(centro.latitude, centro.longitude), style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            BotonPillContorno(if (buscando) "Buscando ubicación…" else "Usar mi ubicación actual", {
+                if (permiso) irAMiUbicacion(fijarCentro = true)
+                else pedirPermiso.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }, Modifier.fillMaxWidth(), color = Teal)
             BotonPill("Guardar Zona", { alGuardar(Geocerca(nombre.trim(), centro.latitude, centro.longitude, radio.toDouble())) }, alto = 48.dp)
         }
     }

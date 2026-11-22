@@ -70,6 +70,8 @@ import com.juanreyna.registrotiempo.ui.theme.Teal
 import com.juanreyna.registrotiempo.ui.theme.TextoSecundario
 
 private const val CORREO_AUTOR = "abel.reynago@gmail.com"
+/** WhatsApp del propietario en formato internacional (Perú +51), sin "+" ni espacios, como lo exige wa.me. */
+private const val WHATSAPP_PROPIETARIO = "51943402706"
 private const val URL_REPOSITORIO = "https://github.com/abelreyna/Registro_Personal"
 
 @Composable
@@ -223,7 +225,7 @@ fun VipScreen(config: VipConfig, diasRestantes: Long, bloqueado: Boolean, alVolv
             }, icono = Icons.Default.Email)
             BotonPillContorno("Solicitar por WhatsApp", {
                 val texto = "Hola, deseo activar el Plan VIP de Registro de Tiempo de Personal."
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/?text=" + Uri.encode(texto)))) }
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$WHATSAPP_PROPIETARIO?text=" + Uri.encode(texto)))) }
             }, Modifier.fillMaxWidth(), color = Teal)
         }
     }
