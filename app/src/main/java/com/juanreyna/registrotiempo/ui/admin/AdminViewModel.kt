@@ -93,10 +93,13 @@ class AdminViewModel @Inject constructor(
 
     fun guardarGeocerca(g: Geocerca) = ejecutar("Geocerca guardada") { repo.guardarGeocerca(adminId, g) }
 
-    fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean, horarioATodos: Boolean) =
-        ejecutar(if (horarioATodos) "Horario aplicado a todo el equipo" else "Datos de ${u.nombre} actualizados") {
-            repo.actualizarColaborador(u.uid, cfg, horario, activo)
-            if (horarioATodos) repo.aplicarHorario(ui.value.colaboradores.map { it.uid }.filter { it != u.uid }, horario)
+    fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean) =
+        ejecutar("Datos de ${u.nombre} actualizados") { repo.actualizarColaborador(u.uid, cfg, horario, activo) }
+
+    /** Pestaña Horarios: aplica un mismo horario a los colaboradores seleccionados. */
+    fun aplicarHorario(uids: List<String>, horario: Horario) =
+        ejecutar("Horario aplicado a ${uids.size} ${if (uids.size == 1) "colaborador" else "colaboradores"}") {
+            repo.aplicarHorario(uids, horario)
         }
 
     /** Aplica la modalidad de pago global a todo el equipo conservando tarifas individuales. */

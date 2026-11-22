@@ -189,7 +189,7 @@ fun AdminScreen(
     LaunchedEffect(mensaje) { mensaje?.let { snackbar.showSnackbar(it); vm.consumirMensaje() } }
 
     val nombre = admin?.nombre?.substringBefore(" ")?.ifBlank { null } ?: "Administrador"
-    val titulos = listOf("Hola, $nombre", "Gestión de Colaboradores", "Zonas de Trabajo (Geocercas)", "Justificaciones", "Reportes SUNAFIL / Planilla")
+    val titulos = listOf("Hola, $nombre", "Gestión de Colaboradores", "Zonas de Trabajo (Geocercas)", "Justificaciones", "Reportes SUNAFIL / Planilla", "Horarios de Trabajo")
     Box(Modifier.fillMaxSize()) {
         MarcoPantalla(
             titulo = titulos[pestana],
@@ -214,7 +214,8 @@ fun AdminScreen(
                     NavInferior(
                         listOf(
                             Triple("Panel", Icons.Default.Dashboard, 0), Triple("Equipo", Icons.Default.Groups, 1),
-                            Triple("Geocerca", Icons.Default.Map, 2), Triple("Incidencias", Icons.Default.Rule, 3),
+                            Triple("Horarios", Icons.Default.Schedule, 5),
+                            Triple("Zonas", Icons.Default.Map, 2), Triple("Incid.", Icons.Default.Rule, 3),
                             Triple("Reportes", Icons.Default.Assessment, 4)
                         ), pestana, { pestana = it }, insignia = { if (it == 3) ui.pendientes else 0 }
                     )
@@ -229,6 +230,7 @@ fun AdminScreen(
                 1 -> PestanaEquipo(vm, ui)
                 2 -> PestanaGeocerca(empresa.geocerca) { vm.guardarGeocerca(it) }
                 3 -> PestanaIncidencias(vm, ui)
+                5 -> PestanaHorarios(vm, ui)
                 else -> PestanaReportes(vm, ui, infoVip)
             }
         }
@@ -402,8 +404,8 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
         item { Spacer(Modifier.height(8.dp)) }
     }
     editando?.let { u ->
-        DialogoColaborador(u, e.moneda.simbolo, alCerrar = { editando = null }) { cfg, horario, activo, aTodos ->
-            vm.guardarColaborador(u, cfg, horario, activo, aTodos); editando = null
+        DialogoColaborador(u, e.moneda.simbolo, alCerrar = { editando = null }) { cfg, horario, activo ->
+            vm.guardarColaborador(u, cfg, horario, activo); editando = null
         }
     }
 }
@@ -434,7 +436,7 @@ private fun ChipFiltro(texto: String, seleccionado: Boolean, onClick: () -> Unit
 }
 
 @Composable
-private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean, Boolean) -> Unit) {
+private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean) -> Unit) {
     var cfg by remember { mutableStateOf(u.configPago) }
     var tarifa by remember { mutableStateOf(if (cfg.tarifaPorHora > 0) cfg.tarifaPorHora.toString() else "") }
     var sueldo by remember { mutableStateOf(if (cfg.sueldoBase > 0) cfg.sueldoBase.toString() else "") }
@@ -442,7 +444,6 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
     var tolerancia by remember { mutableStateOf(u.horario.toleranciaMin.toString()) }
     var recargo1 by remember { mutableStateOf(formatoPct(cfg.recargoExtra1)) }
     var recargo2 by remember { mutableStateOf(formatoPct(cfg.recargoExtra2)) }
-    var horarioATodos by remember { mutableStateOf(false) }
     val toleranciaMin = tolerancia.toIntOrNull()
     val horarioValido = horario.minutosJornadaProgramada > 0 && toleranciaMin != null && toleranciaMin in 0..60
     var activo by remember { mutableStateOf(u.activo) }
@@ -514,10 +515,8 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                     style = MaterialTheme.typography.bodySmall,
                     color = if (horario.minutosJornadaProgramada > 0) TextoSecundario else Rojo
                 )
-                Row(Modifier.fillMaxWidth().clickable { horarioATodos = !horarioATodos }, verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(horarioATodos, { horarioATodos = it }, colors = CheckboxDefaults.colors(checkedColor = Teal))
-                    Text("Aplicar este horario a todo el equipo", style = MaterialTheme.typography.bodyMedium)
-                }
+                Text("Para cambiar el horario de varios colaboradores a la vez usa la pestaña Horarios.",
+                    style = MaterialTheme.typography.bodySmall, color = Teal)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ChipSimple(if (activo) "Enlace Activo" else "Desvinculado", if (activo) VerdeEsmeralda else Rojo)
                     Spacer(Modifier.weight(1f))
@@ -533,7 +532,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                         sueldoBase = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0,
                         recargoExtra1 = recargo1.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 25.0,
                         recargoExtra2 = recargo2.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 35.0
-                    ), horario.copy(toleranciaMin = toleranciaMin ?: 5), activo, horarioATodos
+                    ), horario.copy(toleranciaMin = toleranciaMin ?: 5), activo
                 )
             }, enabled = horarioValido) { Text("Guardar", color = Teal, fontWeight = FontWeight.Bold) }
         },
@@ -545,7 +544,7 @@ private fun formatoPct(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() els
 
 /** Campo de hora que abre el reloj del sistema (formato 24 h). */
 @Composable
-private fun CampoHora(etiqueta: String, valor: String, modifier: Modifier = Modifier, alCambiar: (String) -> Unit) {
+internal fun CampoHora(etiqueta: String, valor: String, modifier: Modifier = Modifier, alCambiar: (String) -> Unit) {
     val context = LocalContext.current
     Column(
         modifier.clip(RoundedCornerShape(12.dp)).border(1.dp, Borde, RoundedCornerShape(12.dp))

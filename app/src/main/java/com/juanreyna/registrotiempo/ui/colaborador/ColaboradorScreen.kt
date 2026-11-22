@@ -122,7 +122,12 @@ fun NavInferior(items: List<Triple<String, androidx.compose.ui.graphics.vector.I
                     if (insignia(idx) > 0) androidx.compose.material3.BadgedBox(badge = { androidx.compose.material3.Badge { Text("${insignia(idx)}") } }) { Icon(i, null) }
                     else Icon(i, null)
                 },
-                label = { Text(t) },
+                label = {
+                    Text(
+                        t, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        style = if (items.size > 5) MaterialTheme.typography.labelSmall.copy(fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp)) else MaterialTheme.typography.labelMedium
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color.White, indicatorColor = Teal,
                     selectedTextColor = Teal, unselectedIconColor = TextoSecundario, unselectedTextColor = TextoSecundario
