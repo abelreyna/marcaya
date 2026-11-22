@@ -57,8 +57,39 @@ data class ConfigPago(
     val regimen: RegimenLaboral = RegimenLaboral.GENERAL,
     val asignacionFamiliar: Boolean = false,
     val sistemaPension: SistemaPension = SistemaPension.ONP,
-    val comisionMixta: Boolean = false
+    val comisionMixta: Boolean = false,
+    /** Modo Simple: recargo (%) de las 2 primeras horas extra del día y desde la tercera. */
+    val recargoExtra1: Double = 25.0,
+    val recargoExtra2: Double = 35.0
 )
+
+/**
+ * Horario de trabajo del colaborador (horas "HH:mm", zona Lima).
+ * - Ingreso después de [entrada] + [toleranciaMin] → tardanza.
+ * - Descanso más largo que el programado + tolerancia → exceso de descanso (no se paga).
+ * - Salida después de [salida] + tolerancia → horas extras (desde la hora de salida programada).
+ */
+data class Horario(
+    val entrada: String = "08:00",
+    val inicioDescanso: String = "13:00",
+    val finDescanso: String = "14:00",
+    val salida: String = "17:00",
+    val toleranciaMin: Int = 5
+) {
+    val minutosDescansoProgramado: Int get() = diferencia(inicioDescanso, finDescanso)
+    val minutosJornadaProgramada: Int get() = diferencia(entrada, salida) - minutosDescansoProgramado
+
+    private fun diferencia(desde: String, hasta: String): Int {
+        val d = minutos(hasta) - minutos(desde)
+        return if (d < 0) d + 24 * 60 else d
+    }
+
+    companion object {
+        private val FORMATO = Regex("([01]\\d|2[0-3]):[0-5]\\d")
+        fun esHoraValida(h: String) = FORMATO.matches(h)
+        fun minutos(h: String): Int = runCatching { h.split(":").let { it[0].trim().toInt() * 60 + it[1].trim().toInt() } }.getOrDefault(0)
+    }
+}
 
 data class Usuario(
     val uid: String = "",
@@ -69,7 +100,7 @@ data class Usuario(
     val dni: String = "",
     val telefono: String = "",
     val activo: Boolean = true,
-    val horaIngresoEsperada: String = "08:00",
+    val horario: Horario = Horario(),
     val configPago: ConfigPago = ConfigPago(),
     /** Foto de perfil como JPEG 320×320 en Base64 (vacía = iniciales). Se guarda en Firestore: sin Firebase Storage. */
     val foto: String = ""

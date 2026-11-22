@@ -53,14 +53,14 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo))
           && get(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo)).data.adminId
                == request.resource.data.adminId
-          && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje']))
+          && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje', 'horario']))
       );
 
       allow update: if isAuthenticated() && fotoValida() && (
         isAdminOfCompany(resource.data.adminId) ||
         (request.auth.uid == userId
           && !request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(['rol', 'adminId', 'tarifaPorHora', 'regimenLaboral', 'configPago', 'activo'])
+              .hasAny(['rol', 'adminId', 'tarifaPorHora', 'regimenLaboral', 'configPago', 'activo', 'horario', 'horaIngresoEsperada'])
           // ultimoMarcaje solo puede fijarse a la hora del servidor
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ultimoMarcaje'])
               || request.resource.data.ultimoMarcaje == request.time))

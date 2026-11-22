@@ -6,6 +6,7 @@ import com.juanreyna.registrotiempo.domain.model.ConfigPago
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.EstadoJustificacion
 import com.juanreyna.registrotiempo.domain.model.Geocerca
+import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.Justificacion
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.ModoPago
@@ -31,8 +32,30 @@ fun ConfigPago.aMapa(): Map<String, Any> = mapOf(
     "regimen" to regimen.name,
     "asignacionFamiliar" to asignacionFamiliar,
     "sistemaPension" to sistemaPension.name,
-    "comisionMixta" to comisionMixta
+    "comisionMixta" to comisionMixta,
+    "recargoExtra1" to recargoExtra1,
+    "recargoExtra2" to recargoExtra2
 )
+
+fun Horario.aMapa(): Map<String, Any> = mapOf(
+    "entrada" to entrada, "inicioDescanso" to inicioDescanso,
+    "finDescanso" to finDescanso, "salida" to salida, "toleranciaMin" to toleranciaMin
+)
+
+/** Lee el horario; los perfiles antiguos solo tenían "horaIngresoEsperada". */
+@Suppress("UNCHECKED_CAST")
+private fun DocumentSnapshot.horarioDe(): Horario {
+    val m = get("horario") as? Map<String, Any?>
+    val d = Horario(entrada = getString("horaIngresoEsperada") ?: "08:00")
+    if (m == null) return d
+    return Horario(
+        entrada = m["entrada"] as? String ?: d.entrada,
+        inicioDescanso = m["inicioDescanso"] as? String ?: d.inicioDescanso,
+        finDescanso = m["finDescanso"] as? String ?: d.finDescanso,
+        salida = m["salida"] as? String ?: d.salida,
+        toleranciaMin = (m["toleranciaMin"] as? Number)?.toInt() ?: d.toleranciaMin
+    )
+}
 
 @Suppress("UNCHECKED_CAST")
 private fun configDe(mapa: Any?): ConfigPago {
@@ -44,7 +67,9 @@ private fun configDe(mapa: Any?): ConfigPago {
         regimen = enumDe(m["regimen"], RegimenLaboral.GENERAL),
         asignacionFamiliar = m["asignacionFamiliar"] as? Boolean ?: false,
         sistemaPension = enumDe(m["sistemaPension"], SistemaPension.ONP),
-        comisionMixta = m["comisionMixta"] as? Boolean ?: false
+        comisionMixta = m["comisionMixta"] as? Boolean ?: false,
+        recargoExtra1 = (m["recargoExtra1"] as? Number)?.toDouble() ?: 25.0,
+        recargoExtra2 = (m["recargoExtra2"] as? Number)?.toDouble() ?: 35.0
     )
 }
 
@@ -57,7 +82,7 @@ fun DocumentSnapshot.aUsuario() = Usuario(
     dni = s("dni"),
     telefono = s("telefono"),
     activo = getBoolean("activo") ?: true,
-    horaIngresoEsperada = getString("horaIngresoEsperada") ?: "08:00",
+    horario = horarioDe(),
     configPago = configDe(get("configPago")),
     foto = s("foto")
 )

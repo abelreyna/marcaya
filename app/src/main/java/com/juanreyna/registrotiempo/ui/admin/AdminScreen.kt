@@ -1,5 +1,9 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import com.juanreyna.registrotiempo.domain.model.Horario
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.Checkbox
+import android.app.TimePickerDialog
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -398,8 +402,8 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
         item { Spacer(Modifier.height(8.dp)) }
     }
     editando?.let { u ->
-        DialogoColaborador(u, e.moneda.simbolo, alCerrar = { editando = null }) { cfg, hora, activo ->
-            vm.guardarColaborador(u, cfg, hora, activo); editando = null
+        DialogoColaborador(u, e.moneda.simbolo, alCerrar = { editando = null }) { cfg, horario, activo, aTodos ->
+            vm.guardarColaborador(u, cfg, horario, activo, aTodos); editando = null
         }
     }
 }
@@ -430,11 +434,17 @@ private fun ChipFiltro(texto: String, seleccionado: Boolean, onClick: () -> Unit
 }
 
 @Composable
-private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alGuardar: (ConfigPago, String, Boolean) -> Unit) {
+private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean, Boolean) -> Unit) {
     var cfg by remember { mutableStateOf(u.configPago) }
     var tarifa by remember { mutableStateOf(if (cfg.tarifaPorHora > 0) cfg.tarifaPorHora.toString() else "") }
     var sueldo by remember { mutableStateOf(if (cfg.sueldoBase > 0) cfg.sueldoBase.toString() else "") }
-    var hora by remember { mutableStateOf(u.horaIngresoEsperada) }
+    var horario by remember { mutableStateOf(u.horario) }
+    var tolerancia by remember { mutableStateOf(u.horario.toleranciaMin.toString()) }
+    var recargo1 by remember { mutableStateOf(formatoPct(cfg.recargoExtra1)) }
+    var recargo2 by remember { mutableStateOf(formatoPct(cfg.recargoExtra2)) }
+    var horarioATodos by remember { mutableStateOf(false) }
+    val toleranciaMin = tolerancia.toIntOrNull()
+    val horarioValido = horario.minutosJornadaProgramada > 0 && toleranciaMin != null && toleranciaMin in 0..60
     var activo by remember { mutableStateOf(u.activo) }
     AlertDialog(
         onDismissRequest = alCerrar,
@@ -449,6 +459,13 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                 if (cfg.modo == ModoPago.SIMPLE) {
                     OutlinedTextField(tarifa, { tarifa = it }, label = { Text("Pago por Hora Ordinaria ($mon)") }, shape = FormaCampo,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    Text("Recargo por horas extras", fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(recargo1, { recargo1 = it.take(5) }, Modifier.weight(1f), label = { Text("2 primeras h (%)") },
+                            shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        OutlinedTextField(recargo2, { recargo2 = it.take(5) }, Modifier.weight(1f), label = { Text("Desde la 3.ª h (%)") },
+                            shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    }
                 } else {
                     OutlinedTextField(sueldo, { sueldo = it }, label = { Text("Sueldo base mensual ($mon)") }, shape = FormaCampo,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
@@ -474,7 +491,33 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                         Switch(cfg.comisionMixta, { cfg = cfg.copy(comisionMixta = it) }, colors = SwitchDefaults.colors(checkedTrackColor = Teal))
                     }
                 }
-                OutlinedTextField(hora, { hora = it.take(5) }, label = { Text("Hora de ingreso (HH:mm)") }, shape = FormaCampo)
+                Text("Horario de trabajo", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CampoHora("Entrada", horario.entrada, Modifier.weight(1f)) { horario = horario.copy(entrada = it) }
+                    CampoHora("Salida", horario.salida, Modifier.weight(1f)) { horario = horario.copy(salida = it) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { horario = horario.copy(inicioDescanso = it) }
+                    CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { horario = horario.copy(finDescanso = it) }
+                }
+                OutlinedTextField(
+                    tolerancia, { tolerancia = it.filter(Char::isDigit).take(2) }, label = { Text("Tolerancia (minutos)") },
+                    shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    isError = toleranciaMin == null || toleranciaMin > 60
+                )
+                Text(
+                    if (horario.minutosJornadaProgramada > 0)
+                        "Jornada: ${Fechas.duracion(horario.minutosJornadaProgramada.toLong())} · Descanso: ${Fechas.duracion(horario.minutosDescansoProgramado.toLong())}\n" +
+                            "Tardanza: ingreso después de la entrada + tolerancia. Horas extras: salida después de la hora de salida. " +
+                            "El exceso de descanso no se paga."
+                    else "Revisa el horario: la jornada no puede quedar en cero.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (horario.minutosJornadaProgramada > 0) TextoSecundario else Rojo
+                )
+                Row(Modifier.fillMaxWidth().clickable { horarioATodos = !horarioATodos }, verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(horarioATodos, { horarioATodos = it }, colors = CheckboxDefaults.colors(checkedColor = Teal))
+                    Text("Aplicar este horario a todo el equipo", style = MaterialTheme.typography.bodyMedium)
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ChipSimple(if (activo) "Enlace Activo" else "Desvinculado", if (activo) VerdeEsmeralda else Rojo)
                     Spacer(Modifier.weight(1f))
@@ -487,13 +530,37 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                 alGuardar(
                     cfg.copy(
                         tarifaPorHora = tarifa.replace(',', '.').toDoubleOrNull() ?: 0.0,
-                        sueldoBase = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0
-                    ), hora, activo
+                        sueldoBase = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0,
+                        recargoExtra1 = recargo1.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 25.0,
+                        recargoExtra2 = recargo2.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 35.0
+                    ), horario.copy(toleranciaMin = toleranciaMin ?: 5), activo, horarioATodos
                 )
-            }, enabled = hora.matches(Regex("\\d{2}:\\d{2}"))) { Text("Guardar", color = Teal, fontWeight = FontWeight.Bold) }
+            }, enabled = horarioValido) { Text("Guardar", color = Teal, fontWeight = FontWeight.Bold) }
         },
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } }
     )
+}
+
+private fun formatoPct(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
+
+/** Campo de hora que abre el reloj del sistema (formato 24 h). */
+@Composable
+private fun CampoHora(etiqueta: String, valor: String, modifier: Modifier = Modifier, alCambiar: (String) -> Unit) {
+    val context = LocalContext.current
+    Column(
+        modifier.clip(RoundedCornerShape(12.dp)).border(1.dp, Borde, RoundedCornerShape(12.dp))
+            .clickable {
+                val m = Horario.minutos(valor)
+                TimePickerDialog(context, { _, h, min -> alCambiar("%02d:%02d".format(h, min)) }, m / 60, m % 60, true).show()
+            }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(etiqueta, style = MaterialTheme.typography.labelSmall, color = TextoSecundario)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(valor, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = AzulMarino)
+            Icon(Icons.Default.Schedule, null, tint = Teal, modifier = Modifier.size(18.dp))
+        }
+    }
 }
 
 /** Radio mínimo de la geocerca: por debajo de 20 m el margen de error del GPS (5–15 m) rechaza marcajes válidos. */

@@ -206,12 +206,16 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
                         HorizontalDivider(color = Borde)
                         FilaDato("DNI / CE", u.dni.ifBlank { "—" })
                         HorizontalDivider(color = Borde)
-                        FilaDato("Hora de ingreso", u.horaIngresoEsperada)
+                        FilaDato("Horario", "${u.horario.entrada} – ${u.horario.salida}")
+                        HorizontalDivider(color = Borde)
+                        FilaDato("Descanso", "${u.horario.inicioDescanso} – ${u.horario.finDescanso}")
+                        HorizontalDivider(color = Borde)
+                        FilaDato("Tolerancia", "${u.horario.toleranciaMin} min")
                     }
                 }
                 Text(
                     if (esAdmin) "El correo y el código de la empresa no se pueden modificar."
-                    else "El DNI, la hora de ingreso y la tarifa solo los puede cambiar tu administrador.",
+                    else "El DNI, el horario y la tarifa solo los puede cambiar tu administrador.",
                     style = MaterialTheme.typography.bodySmall, color = TextoSecundario
                 )
                 Spacer(Modifier.height(8.dp))

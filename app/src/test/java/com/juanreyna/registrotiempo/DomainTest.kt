@@ -3,7 +3,9 @@ package com.juanreyna.registrotiempo
 import com.juanreyna.registrotiempo.domain.calc.JornadaCalculator
 import com.juanreyna.registrotiempo.domain.calc.ParametrosLegales
 import com.juanreyna.registrotiempo.domain.calc.PlanillaPeruCalculator
+import com.juanreyna.registrotiempo.domain.calc.ResumenMensual
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
+import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.ModoPago
 import com.juanreyna.registrotiempo.domain.model.RegimenLaboral
@@ -50,6 +52,40 @@ class DomainTest {
         val b = PlanillaPeruCalculator.calcular(cfg, listOf(11.0))
         assertEquals(80.0 + 25.0 + 13.5, b.totalIngresos, 0.001)
         assertEquals((118.5 * 0.13), b.totalDescuentos, 0.01)
+    }
+
+    @Test fun horario_tardanzaExcesoDescansoYExtras() {
+        // Día en hora de Lima: 08:00–17:00, descanso 13:00–14:00, tolerancia 5 min
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("America/Lima")).apply {
+            set(2026, 10, 20, 0, 0, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val medianoche = cal.timeInMillis
+        fun a(h: Int, m: Int) = medianoche + (h * 60 + m) * 60_000L
+        val marcajes = listOf(
+            Marcaje(tipo = TipoMarcaje.INGRESO, timestampMillis = a(8, 20)),
+            Marcaje(tipo = TipoMarcaje.INICIO_DESCANSO, timestampMillis = a(13, 0)),
+            Marcaje(tipo = TipoMarcaje.FIN_DESCANSO, timestampMillis = a(14, 15)),
+            Marcaje(tipo = TipoMarcaje.SALIDA, timestampMillis = a(19, 30))
+        )
+        val dia = ResumenMensual.diaDe("2026-11-20", marcajes, a(23, 0), Horario())
+        assertTrue(dia.tardanza)
+        assertEquals(20L, dia.minutosTarde)
+        assertEquals(15L, dia.minutosExcesoDescanso)   // 75 min de descanso − 60 programados
+        assertEquals(150L, dia.minutosExtra)           // 17:00 → 19:30
+        assertEquals(595L, dia.minutosEfectivos)       // el exceso de descanso no cuenta como trabajado
+
+        // Modo Simple con recargo configurable 25 % / 35 %: 445 min ordinarios + 2 h al 25 % + 0.5 h al 35 %
+        val b = PlanillaPeruCalculator.calcularDias(ConfigPago(modo = ModoPago.SIMPLE, tarifaPorHora = 10.0), listOf(dia.horas))
+        assertEquals(74.17 + 25.0 + 6.75, b.totalIngresos, 0.01)
+
+        // Dentro de la tolerancia no hay tardanza ni extras
+        val puntual = listOf(
+            Marcaje(tipo = TipoMarcaje.INGRESO, timestampMillis = a(8, 4)),
+            Marcaje(tipo = TipoMarcaje.SALIDA, timestampMillis = a(17, 3))
+        )
+        val d2 = ResumenMensual.diaDe("2026-11-20", puntual, a(23, 0), Horario())
+        assertEquals(false, d2.tardanza)
+        assertEquals(0L, d2.minutosExtra)
     }
 
     @Test fun quinta_tramos() {

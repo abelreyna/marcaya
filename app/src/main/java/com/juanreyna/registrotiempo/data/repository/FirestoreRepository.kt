@@ -7,6 +7,7 @@ import com.juanreyna.registrotiempo.domain.model.ConfigPago
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.EstadoJustificacion
 import com.juanreyna.registrotiempo.domain.model.Geocerca
+import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.Justificacion
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.ModoPago
@@ -107,7 +108,7 @@ class FirestoreRepository @Inject constructor() {
             mapOf(
                 "rol" to Rol.COLABORADOR.name, "adminId" to adminId, "codigoVinculo" to cod,
                 "nombre" to nombre, "correo" to correo, "dni" to dni, "telefono" to telefono,
-                "activo" to true, "horaIngresoEsperada" to "08:00",
+                "activo" to true, "horaIngresoEsperada" to Horario().entrada, // el horario completo lo fija el administrador
                 "creado" to FieldValue.serverTimestamp()
             )
         ).await()
@@ -122,10 +123,21 @@ class FirestoreRepository @Inject constructor() {
         awaitClose { reg.remove() }
     }
 
-    suspend fun actualizarColaborador(uid: String, config: ConfigPago, horaIngreso: String, activo: Boolean) {
+    suspend fun actualizarColaborador(uid: String, config: ConfigPago, horario: Horario, activo: Boolean) {
         usuarios.document(uid).update(
-            mapOf("configPago" to config.aMapa(), "horaIngresoEsperada" to horaIngreso, "activo" to activo)
+            mapOf(
+                "configPago" to config.aMapa(), "activo" to activo,
+                "horario" to horario.aMapa(), "horaIngresoEsperada" to horario.entrada
+            )
         ).await()
+    }
+
+    /** Aplica el mismo horario a varios colaboradores en un solo lote. */
+    suspend fun aplicarHorario(uids: List<String>, horario: Horario) {
+        if (uids.isEmpty()) return
+        val lote = db.batch()
+        uids.forEach { lote.update(usuarios.document(it), mapOf("horario" to horario.aMapa(), "horaIngresoEsperada" to horario.entrada)) }
+        lote.commit().await()
     }
 
     // ---------- Empresa ----------

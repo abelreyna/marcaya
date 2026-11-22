@@ -32,6 +32,9 @@ data class ParametrosLegales(
     val deduccionQuintaUit: Double = 7.0
 )
 
+/** Horas de un día ya separadas en ordinarias y extras (según el horario del colaborador). */
+data class HorasDia(val ordinarias: Double, val extra: Double)
+
 data class LineaBoleta(val concepto: String, val monto: Double)
 
 /** Boleta mensual proyectada (Modo Simple o Avanzado). */
@@ -57,46 +60,63 @@ internal fun Double.r2(): Double = round(this * 100) / 100
 object PlanillaPeruCalculator {
 
     /**
+     * Versión sin horario: las horas extras son lo que excede la jornada base diaria (8 h).
      * @param horasPorDia horas efectivas de cada día trabajado en el periodo.
      */
     fun calcular(
         config: ConfigPago,
         horasPorDia: List<Double>,
         p: ParametrosLegales = ParametrosLegales()
+    ): Boleta = calcularDias(config, horasPorDia.map {
+        val extra = JornadaCalculator.horasExtraDelDia(it, p.jornadaDiariaBase)
+        HorasDia(it - extra, extra)
+    }, p)
+
+    /** @param dias horas ordinarias y extras de cada día (las extras ya vienen del horario). */
+    fun calcularDias(
+        config: ConfigPago,
+        dias: List<HorasDia>,
+        p: ParametrosLegales = ParametrosLegales()
     ): Boleta = when (config.modo) {
-        ModoPago.SIMPLE -> modoSimple(config, horasPorDia)
-        ModoPago.AVANZADO -> modoAvanzado(config, horasPorDia, p)
+        ModoPago.SIMPLE -> modoSimple(config, dias)
+        ModoPago.AVANZADO -> modoAvanzado(config, dias, p)
     }
 
-    /** Modo Simple: horas × tarifa, sin descuentos. */
-    private fun modoSimple(config: ConfigPago, horasPorDia: List<Double>): Boleta {
-        val horas = horasPorDia.sum()
+    /** Por día: las 2 primeras horas extra van al primer tramo y el resto al segundo. */
+    private fun tramosExtra(dias: List<HorasDia>): Pair<Double, Double> =
+        dias.sumOf { it.extra.coerceAtMost(2.0) } to dias.sumOf { (it.extra - 2.0).coerceAtLeast(0.0) }
+
+    /** Modo Simple: horas × tarifa, sin descuentos; extras con el recargo configurado por el administrador. */
+    private fun modoSimple(config: ConfigPago, dias: List<HorasDia>): Boleta {
+        val horas = dias.sumOf { it.ordinarias }
+        val (he1, he2) = tramosExtra(dias)
+        val t = config.tarifaPorHora
+        val montoHe1 = (he1 * t * (1 + config.recargoExtra1 / 100)).r2()
+        val montoHe2 = (he2 * t * (1 + config.recargoExtra2 / 100)).r2()
         return Boleta(
             modo = ModoPago.SIMPLE,
             horasOrdinarias = horas,
-            horasExtra25 = 0.0,
-            horasExtra35 = 0.0,
-            ingresos = listOf(LineaBoleta("Horas trabajadas (${"%.2f".format(horas)} h × ${"%.2f".format(config.tarifaPorHora)})", (horas * config.tarifaPorHora).r2())),
+            horasExtra25 = he1,
+            horasExtra35 = he2,
+            ingresos = buildList {
+                add(LineaBoleta("Horas trabajadas (${"%.2f".format(horas)} h × ${"%.2f".format(t)})", (horas * t).r2()))
+                if (montoHe1 > 0) add(LineaBoleta("Horas extras +${pct(config.recargoExtra1)} (${"%.2f".format(he1)} h)", montoHe1))
+                if (montoHe2 > 0) add(LineaBoleta("Horas extras +${pct(config.recargoExtra2)} (${"%.2f".format(he2)} h)", montoHe2))
+            },
             descuentos = emptyList(),
             aportesEmpleador = emptyList(),
             provisiones = emptyList()
         )
     }
 
-    private fun modoAvanzado(config: ConfigPago, horasPorDia: List<Double>, p: ParametrosLegales): Boleta {
+    private fun pct(v: Double) = if (v % 1.0 == 0.0) "${v.toInt()} %" else "${"%.1f".format(v)} %"
+
+    private fun modoAvanzado(config: ConfigPago, dias: List<HorasDia>, p: ParametrosLegales): Boleta {
         val valorHora = config.sueldoBase / p.horasMensualesBase
 
         // Horas extras por día: 25 % las 2 primeras, 35 % a partir de la tercera
-        var ordinarias = 0.0
-        var he25 = 0.0
-        var he35 = 0.0
-        for (h in horasPorDia) {
-            val extra = JornadaCalculator.horasExtraDelDia(h, p.jornadaDiariaBase)
-            ordinarias += h - extra
-            he25 += extra.coerceAtMost(2.0)
-            he35 += (extra - 2.0).coerceAtLeast(0.0)
-        }
-        ordinarias = ordinarias.coerceAtMost(p.horasMensualesBase)
+        val (he25, he35) = tramosExtra(dias)
+        val ordinarias = dias.sumOf { it.ordinarias }.coerceAtMost(p.horasMensualesBase)
 
         val remuneracionOrdinaria = (ordinarias * valorHora).r2()
         val asignacionFamiliar = if (config.asignacionFamiliar) (p.rmv * 0.10).r2() else 0.0

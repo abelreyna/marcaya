@@ -348,10 +348,16 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
                             Text("Pago: ${dinero(mon, d.minutosEfectivos / 60.0 * valorHora)}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                             when {
                                 d.fueraRango -> ChipSimple("Fuera de geocerca", Rojo)
-                                d.tardanza -> ChipSimple("Tardanza", Ambar)
-                                d.minutosEfectivos < 300 -> ChipSimple("Medio día", TextoSecundario)
-                                d.validacionFacial -> ChipSimple("✓ Validado", VerdeEsmeralda)
+                                d.minutosEfectivos < 300 && !d.tardanza && d.minutosExtra == 0L && d.minutosExcesoDescanso == 0L -> ChipSimple("Medio día", TextoSecundario)
+                                d.validacionFacial && !d.tardanza && d.minutosExtra == 0L && d.minutosExcesoDescanso == 0L -> ChipSimple("✓ Validado", VerdeEsmeralda)
                             }
+                        }
+                        if (d.tardanza || d.minutosExtra > 0 || d.minutosExcesoDescanso > 0) Row(
+                            Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (d.tardanza) ChipSimple("Tardanza ${d.minutosTarde} min", Ambar)
+                            if (d.minutosExcesoDescanso > 0) ChipSimple("Exceso desc. ${d.minutosExcesoDescanso} min", Rojo)
+                            if (d.minutosExtra > 0) ChipSimple("Extra ${Fechas.duracion(d.minutosExtra)}", Teal)
                         }
                     }
                 }

@@ -18,6 +18,7 @@ import com.juanreyna.registrotiempo.domain.model.Geocerca
 import com.juanreyna.registrotiempo.domain.model.Justificacion
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.ModoPago
+import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.Usuario
 import com.juanreyna.registrotiempo.util.Fechas
 import com.juanreyna.registrotiempo.util.ReportExporter
@@ -81,24 +82,28 @@ class AdminViewModel @Inject constructor(
         val porColab = hoy.groupBy { it.colaboradorId }
         base.copy(filas = cols.map { u ->
             val ms = porColab[u.uid].orEmpty()
-            val horas = JornadaCalculator.resumir(ms, ahora).horasEfectivas
-            val costoHoy = PlanillaPeruCalculator.calcular(u.configPago, listOf(horas)).let {
+            val dia = ResumenMensual.diaDe(Fechas.hoy(), ms, ahora, u.horario)
+            val horas = dia.minutosEfectivos / 60.0
+            val costoHoy = PlanillaPeruCalculator.calcularDias(u.configPago, listOf(dia.horas)).let {
                 if (u.configPago.modo == ModoPago.SIMPLE) it.totalIngresos else it.totalIngresos + it.aportesEmpleador.sumOf { a -> a.monto }
             }
-            FilaMonitoreo(u, JornadaCalculator.estado(ms, u.horaIngresoEsperada), ms.lastOrNull(), horas, costoHoy)
+            FilaMonitoreo(u, JornadaCalculator.estado(ms, u.horario), ms.lastOrNull(), horas, costoHoy)
         })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiAdmin())
 
     fun guardarGeocerca(g: Geocerca) = ejecutar("Geocerca guardada") { repo.guardarGeocerca(adminId, g) }
 
-    fun guardarColaborador(u: Usuario, cfg: ConfigPago, hora: String, activo: Boolean) =
-        ejecutar("Datos de ${u.nombre} actualizados") { repo.actualizarColaborador(u.uid, cfg, hora, activo) }
+    fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean, horarioATodos: Boolean) =
+        ejecutar(if (horarioATodos) "Horario aplicado a todo el equipo" else "Datos de ${u.nombre} actualizados") {
+            repo.actualizarColaborador(u.uid, cfg, horario, activo)
+            if (horarioATodos) repo.aplicarHorario(ui.value.colaboradores.map { it.uid }.filter { it != u.uid }, horario)
+        }
 
     /** Aplica la modalidad de pago global a todo el equipo conservando tarifas individuales. */
     fun aplicarModoGlobal(modo: ModoPago, moneda: String) = ejecutar("Modalidad aplicada a todo el equipo") {
         repo.guardarModoGlobal(adminId, modo, moneda)
         ui.value.colaboradores.forEach { u ->
-            repo.actualizarColaborador(u.uid, u.configPago.copy(modo = modo), u.horaIngresoEsperada, u.activo)
+            repo.actualizarColaborador(u.uid, u.configPago.copy(modo = modo), u.horario, u.activo)
         }
     }
 
