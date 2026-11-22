@@ -17,12 +17,17 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.layout.onSizeChanged
@@ -538,6 +543,20 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
     // Altura de la hoja inferior: el mapa la usa como relleno para centrar el pin en la zona visible.
     val densidad = LocalDensity.current
     var alturaHoja by remember { mutableStateOf(0.dp) }
+    var ampliado by rememberSaveable { mutableStateOf(false) }
+    var recentrar by remember { mutableStateOf(false) }
+    fun alternarAmpliado() {
+        ampliado = !ampliado
+        recentrar = true
+    }
+    // La altura de la hoja cambia en cada fotograma de su animación; cuando se estabiliza, recentra la zona
+    // en el nuevo espacio visible (cada cambio cancela la espera anterior).
+    LaunchedEffect(alturaHoja, recentrar) {
+        if (!recentrar) return@LaunchedEffect
+        delay(200)
+        camara.animate(CameraUpdateFactory.newLatLng(centro))
+        recentrar = false // al final: cambiar esta clave antes cancelaría la animación
+    }
 
     Box(Modifier.fillMaxSize()) {
         GoogleMap(
@@ -551,14 +570,42 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
             Marker(state = marcador, title = nombre)
             Circle(center = centro, radius = radio.toDouble(), strokeColor = VerdeEsmeralda, fillColor = VerdeEsmeralda.copy(alpha = 0.25f), strokeWidth = 4f)
         }
-        // Hoja inferior de configuración
+        // Botón para ampliar / restaurar el mapa (esquina superior izquierda; la derecha es de "Mi ubicación")
+        Row(
+            Modifier.align(Alignment.TopStart).padding(12.dp)
+                .clip(RoundedCornerShape(50)).background(Color.White)
+                .clickable { alternarAmpliado() }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(if (ampliado) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, null, tint = Teal)
+            Spacer(Modifier.width(6.dp))
+            Text(if (ampliado) "Reducir mapa" else "Ampliar mapa", color = Teal, fontWeight = FontWeight.SemiBold)
+        }
+        // Hoja inferior de configuración (compacta cuando el mapa está ampliado)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .onSizeChanged { alturaHoja = with(densidad) { it.height.toDp() } }
-                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(Color.White).padding(16.dp),
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(Color.White)
+                .animateContentSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(Borde))
+            Box(
+                Modifier.align(Alignment.CenterHorizontally).clickable { alternarAmpliado() }.padding(vertical = 4.dp, horizontal = 24.dp)
+            ) { Box(Modifier.size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(Borde)) }
+            if (ampliado) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Radio: ${radio.toInt()} m", fontWeight = FontWeight.SemiBold)
+                        Text(nombre, style = MaterialTheme.typography.bodySmall, color = TextoSecundario, maxLines = 1)
+                    }
+                    TextButton(onClick = { alternarAmpliado() }) {
+                        Text("Ajustes", color = Teal, fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Default.ExpandLess, null, tint = Teal)
+                    }
+                }
+                BotonPill("Guardar Zona", { alGuardar(Geocerca(nombre.trim(), centro.latitude, centro.longitude, radio.toDouble())) }, alto = 48.dp)
+            } else {
             Text("Radio de Cobertura: ${radio.toInt()} metros", fontWeight = FontWeight.SemiBold)
             Slider(radio, { radio = it }, valueRange = 5f..500f, colors = SliderDefaults.colors(thumbColor = Teal, activeTrackColor = Teal))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -577,6 +624,7 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
                 else pedirPermiso.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             }, Modifier.fillMaxWidth(), color = Teal)
             BotonPill("Guardar Zona", { alGuardar(Geocerca(nombre.trim(), centro.latitude, centro.longitude, radio.toDouble())) }, alto = 48.dp)
+            }
         }
     }
 }
