@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import com.juanreyna.registrotiempo.domain.calc.Boleta
+import com.juanreyna.registrotiempo.domain.calc.CostoColaborador
+import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
 import com.juanreyna.registrotiempo.domain.calc.ResumenColaborador
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.ModoPago
@@ -160,6 +162,101 @@ object ReportExporter {
                     r.usuario.nombre, r.usuario.dni, b.modo.name, r.dias.size, "%.2f".format(r.horasTotales),
                     r.tardanzas, "%.2f".format(b.totalIngresos), "%.2f".format(b.totalDescuentos),
                     "%.2f".format(b.netoAPagar), "%.2f".format(b.costoEmpleador), empresa.moneda.simbolo
+                ).joinToString(";")
+            )
+        }
+        f.writeText(sb.toString())
+        return f
+    }
+
+    private fun hm(millis: Long?) = Fechas.hora(millis).take(5)
+    private fun horas(min: Long) = "%.2f".format(min / 60.0)
+
+    /** Reporte de costos (salarios): pago por día y por colaborador, con totales del mes. */
+    fun costosPdf(context: Context, empresa: Empresa, costos: List<CostoColaborador>, mesEtiqueta: String): File {
+        val l = Lienzo(PdfDocument()).apply { nuevaPagina() }
+        val mon = empresa.moneda.simbolo
+        l.linea("REPORTE DE COSTOS LABORALES (SALARIOS)", l.titulo, salto = 20f)
+        l.linea("Empleador: ${empresa.nombreComercial}   Periodo: $mesEtiqueta", l.negrita)
+        l.separador()
+        l.linea("RESUMEN DEL MES", l.negrita)
+        l.fila("Colaboradores con marcajes", "${costos.count { it.dias.isNotEmpty() }}")
+        l.fila("Horas trabajadas (ordinarias + extras)", horas(costos.sumOf { it.minutosTrabajados }) + " h")
+        l.fila("Horas extras", horas(costos.sumOf { it.minutosExtra }) + " h")
+        l.fila("Pagado por días trabajados", m(mon, costos.sumOf { it.pagadoPorDias }))
+        l.fila("Total bruto (boletas)", m(mon, costos.sumOf { it.boleta.totalIngresos }))
+        l.fila("Neto a pagar", m(mon, costos.sumOf { it.boleta.netoAPagar }), l.negrita)
+        l.fila("Costo laboral total del empleador", m(mon, costos.sumOf { it.boleta.costoEmpleador }), l.verde)
+        l.separador()
+
+        val xs = listOf(40f, 108f, 150f, 192f, 240f, 290f, 370f, 450f)
+        costos.forEach { c ->
+            val u = c.colaborador
+            l.linea("${u.nombre} — DNI/CE ${u.dni.ifBlank { "—" }}", l.negrita)
+            l.linea(
+                "${if (u.configPago.modo == ModoPago.SIMPLE) "Modo Simple" else "Modo Avanzado · ${u.configPago.regimen.etiqueta}"}   " +
+                    "Valor hora: ${m(mon, ReporteCostos.valorHora(u.configPago))}   Horario: ${u.horario.entrada}–${u.horario.salida}"
+            )
+            if (c.dias.isEmpty()) { l.linea("Sin días trabajados en el periodo."); l.separador(); return@forEach }
+            l.columnas(listOf("Fecha", "Ingreso", "Salida", "H. ord.", "H. extra", "Pago ord.", "Pago extra", "Total día"), xs, l.negrita)
+            c.dias.forEach { d ->
+                l.columnas(
+                    listOf(
+                        d.fecha, hm(d.ingreso), hm(d.salida), horas(d.minutosOrdinarios), horas(d.minutosExtra),
+                        "%,.2f".format(d.montoOrdinario), "%,.2f".format(d.montoExtra), "%,.2f".format(d.total)
+                    ), xs
+                )
+            }
+            l.fila("Pagado por ${c.dias.size} ${if (c.dias.size == 1) "día" else "días"} (${horas(c.minutosTrabajados)} h)", m(mon, c.pagadoPorDias), l.negrita)
+            val b = c.boleta
+            l.fila("Bruto del mes / Descuentos", "${m(mon, b.totalIngresos)}  /  -${m(mon, b.totalDescuentos)}")
+            l.fila("Neto a pagar / Costo empleador", "${m(mon, b.netoAPagar)}  /  ${m(mon, b.costoEmpleador)}", l.negrita)
+            l.separador()
+        }
+
+        val dias = ReporteCostos.porDia(costos)
+        if (dias.isNotEmpty()) {
+            l.linea("COSTO POR DÍA", l.negrita)
+            val xd = listOf(40f, 130f, 250f, 330f)
+            l.columnas(listOf("Fecha", "Colaboradores", "Horas", "Total pagado"), xd, l.negrita)
+            dias.sortedBy { it.first }.forEach { (fecha, ds) ->
+                l.columnas(listOf(fecha, "${ds.size}", horas(ds.sumOf { it.minutosTrabajados }), m(mon, ds.sumOf { it.total })), xd)
+            }
+        }
+        l.linea("")
+        l.linea("Montos por día = horas ordinarias × valor hora + horas extras con recargo. Los totales del mes incluyen asignación familiar, descuentos y aportes según la boleta.", Paint(l.normal).apply { textSize = 7f })
+        val f = File(carpeta(context), "costos_${mesEtiqueta.replace(" ", "_")}.pdf")
+        l.terminar(f)
+        return f
+    }
+
+    /** Costos en Excel (CSV): una fila por colaborador y día, más el resumen mensual por colaborador. */
+    fun costosCsv(context: Context, empresa: Empresa, costos: List<CostoColaborador>, mes: String): File {
+        val f = File(carpeta(context), "costos_$mes.csv")
+        val mon = empresa.moneda.simbolo
+        val sb = StringBuilder("﻿")
+        sb.appendLine("DETALLE POR DÍA")
+        sb.appendLine("Fecha;Colaborador;DNI/CE;Modalidad;Ingreso;Salida;Horas ordinarias;Horas extras;Tardanza (min);Exceso descanso (min);Valor hora;Pago ordinario;Pago extras;Total día;Moneda")
+        costos.flatMap { it.dias }.sortedWith(compareBy({ it.fecha }, { it.colaborador.nombre })).forEach { d ->
+            val u = d.colaborador
+            sb.appendLine(
+                listOf(
+                    d.fecha, u.nombre, u.dni, u.configPago.modo.name, hm(d.ingreso), hm(d.salida),
+                    horas(d.minutosOrdinarios), horas(d.minutosExtra), d.minutosTarde, d.minutosExcesoDescanso,
+                    "%.2f".format(d.valorHora), "%.2f".format(d.montoOrdinario), "%.2f".format(d.montoExtra), "%.2f".format(d.total), mon
+                ).joinToString(";")
+            )
+        }
+        sb.appendLine()
+        sb.appendLine("RESUMEN DEL MES POR COLABORADOR")
+        sb.appendLine("Colaborador;DNI/CE;Días;Horas trabajadas;Horas extras;Pagado por días;Bruto mes;Descuentos;Neto a pagar;Costo empleador;Moneda")
+        costos.forEach { c ->
+            val b = c.boleta
+            sb.appendLine(
+                listOf(
+                    c.colaborador.nombre, c.colaborador.dni, c.dias.size, horas(c.minutosTrabajados), horas(c.minutosExtra),
+                    "%.2f".format(c.pagadoPorDias), "%.2f".format(b.totalIngresos), "%.2f".format(b.totalDescuentos),
+                    "%.2f".format(b.netoAPagar), "%.2f".format(b.costoEmpleador), mon
                 ).joinToString(";")
             )
         }

@@ -808,6 +808,7 @@ private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {
                 }
             }
             if (r.isEmpty()) item { TextoCentrado("Sin colaboradores en el periodo.") }
+            item { ReporteCostosSeccion(r, mon, Fechas.etiquetaMes(mes), alExportar = { vm.exportar(context, it) }) }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
@@ -832,7 +833,7 @@ private fun FilaPlanilla(c: ResumenColaborador, mon: String) {
 }
 
 @Composable
-private fun CeldaMonto(etiqueta: String, valor: String, modifier: Modifier, color: Color = Color.Unspecified, negrita: Boolean = false) {
+internal fun CeldaMonto(etiqueta: String, valor: String, modifier: Modifier, color: Color = Color.Unspecified, negrita: Boolean = false) {
     Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFFF3F6FA)).padding(horizontal = 8.dp, vertical = 6.dp)) {
         Text(etiqueta, style = MaterialTheme.typography.labelSmall, color = TextoSecundario, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(valor, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = if (negrita) FontWeight.Bold else FontWeight.Medium, maxLines = 1, softWrap = false)

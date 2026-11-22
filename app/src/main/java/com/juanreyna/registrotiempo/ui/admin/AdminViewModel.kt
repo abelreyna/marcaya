@@ -8,6 +8,7 @@ import com.juanreyna.registrotiempo.data.repository.FirestoreRepository
 import com.juanreyna.registrotiempo.domain.calc.JornadaCalculator
 import com.juanreyna.registrotiempo.domain.calc.PlanillaPeruCalculator
 import com.juanreyna.registrotiempo.domain.calc.ResumenColaborador
+import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
 import com.juanreyna.registrotiempo.domain.calc.ResumenMensual
 import com.juanreyna.registrotiempo.domain.model.Alerta
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
@@ -132,6 +133,8 @@ class AdminViewModel @Inject constructor(
                 when (formato) {
                     "PDF" -> ReportExporter.asistenciaSunafilPdf(context, e, datos, Fechas.etiquetaMes(mes)) to "application/pdf"
                     "CSV" -> ReportExporter.planillaCsv(context, e, datos, mes) to "text/csv"
+                    "COSTOS_PDF" -> ReportExporter.costosPdf(context, e, ReporteCostos.construir(datos), Fechas.etiquetaMes(mes)) to "application/pdf"
+                    "COSTOS_CSV" -> ReportExporter.costosCsv(context, e, ReporteCostos.construir(datos), mes) to "text/csv"
                     else -> ReportExporter.plameJor(context, datos, mes) to "text/plain"
                 }
             }
