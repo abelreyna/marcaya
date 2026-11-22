@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
@@ -95,13 +96,15 @@ private fun Opcion(icono: ImageVector, texto: String, detalle: String? = null, o
 }
 
 @Composable
-fun AjustesScreen(alVolver: () -> Unit, alAcercaDe: () -> Unit, alVip: () -> Unit, alCerrarSesion: () -> Unit) {
+fun AjustesScreen(alVolver: () -> Unit, alPerfil: () -> Unit, alAcercaDe: () -> Unit, alVip: () -> Unit, alCerrarSesion: () -> Unit) {
     val context = LocalContext.current
     var confirmar by remember { mutableStateOf(false) }
     var terminos by remember { mutableStateOf(false) }
     MarcoPantalla("Ajustes de la Aplicación", alVolver = alVolver) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             Grupo("Mi Cuenta") {
+                Opcion(Icons.Default.AccountCircle, "Mi Perfil", "Foto, nombre, teléfono e información de la cuenta", alPerfil)
+                HorizontalDivider(color = Borde)
                 Opcion(Icons.Default.Security, "Cuenta de Google vinculada", "Sesión persistente cifrada con Android Keystore") {}
                 HorizontalDivider(color = Borde)
                 Opcion(Icons.Default.WorkspacePremium, "Plan VIP", "Beneficios y activación de licencia", alVip)

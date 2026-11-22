@@ -138,6 +138,7 @@ fun ColaboradorScreen(
     alVerVip: () -> Unit,
     alCerrarBanner: () -> Unit,
     alAjustes: () -> Unit,
+    alPerfil: () -> Unit,
     vm: ColaboradorViewModel = hiltViewModel()
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -163,6 +164,9 @@ fun ColaboradorScreen(
         MarcoPantalla(
             titulo = titulos[pestana],
             subtitulo = if (pestana == 0) Fechas.fechaLarga(ui.ahora).replaceFirstChar { it.uppercase() } else ui.empresa?.nombreComercial,
+            avatar = if (pestana == 0) ui.usuario?.nombre ?: "?" else null,
+            avatarFoto = ui.usuario?.foto.orEmpty(),
+            alTocarAvatar = alPerfil,
             acciones = { IconButton(onClick = alAjustes) { Icon(Icons.Default.Settings, "Ajustes", tint = Color.White) } },
             pie = {
                 NavInferior(

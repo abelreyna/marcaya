@@ -47,6 +47,19 @@ class FirestoreRepository @Inject constructor() {
         awaitClose { reg.remove() }
     }
 
+    /**
+     * Datos básicos que el propio usuario puede editar (nombre y teléfono).
+     * Rol, empresa, DNI y configuración de pago no se tocan aquí.
+     */
+    suspend fun actualizarDatosPerfil(uid: String, nombre: String, telefono: String) {
+        usuarios.document(uid).update(mapOf("nombre" to nombre, "telefono" to telefono)).await()
+    }
+
+    /** Foto de perfil en Base64 (cadena vacía = quitar foto). */
+    suspend fun actualizarFotoPerfil(uid: String, foto: String) {
+        usuarios.document(uid).update("foto", foto).await()
+    }
+
     /** Registro del Administrador: perfil → empresa (plan FREE) → código único. */
     suspend fun registrarAdministrador(uid: String, correo: String, nombre: String, nombreComercial: String): String {
         usuarios.document(uid).set(

@@ -58,7 +58,8 @@ fun DocumentSnapshot.aUsuario() = Usuario(
     telefono = s("telefono"),
     activo = getBoolean("activo") ?: true,
     horaIngresoEsperada = getString("horaIngresoEsperada") ?: "08:00",
-    configPago = configDe(get("configPago"))
+    configPago = configDe(get("configPago")),
+    foto = s("foto")
 )
 
 @Suppress("UNCHECKED_CAST")

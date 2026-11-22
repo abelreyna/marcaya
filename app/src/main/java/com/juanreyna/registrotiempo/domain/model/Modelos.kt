@@ -70,7 +70,9 @@ data class Usuario(
     val telefono: String = "",
     val activo: Boolean = true,
     val horaIngresoEsperada: String = "08:00",
-    val configPago: ConfigPago = ConfigPago()
+    val configPago: ConfigPago = ConfigPago(),
+    /** Foto de perfil como JPEG 320×320 en Base64 (vacía = iniciales). Se guarda en Firestore: sin Firebase Storage. */
+    val foto: String = ""
 )
 
 data class Geocerca(

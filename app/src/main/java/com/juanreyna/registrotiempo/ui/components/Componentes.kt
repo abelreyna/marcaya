@@ -4,6 +4,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.juanreyna.registrotiempo.util.FotoPerfil
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,6 +92,8 @@ fun MarcoPantalla(
     subtitulo: String? = null,
     alVolver: (() -> Unit)? = null,
     avatar: String? = null,
+    avatarFoto: String = "",
+    alTocarAvatar: (() -> Unit)? = null,
     centrado: Boolean = false,
     acciones: @Composable RowScope.() -> Unit = {},
     pie: @Composable (() -> Unit)? = null,
@@ -102,7 +109,7 @@ fun MarcoPantalla(
         ) {
             if (alVolver != null) IconButton(onClick = alVolver) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White) }
             else Spacer(Modifier.width(8.dp))
-            if (avatar != null) { Avatar(avatar, 44.dp); Spacer(Modifier.width(12.dp)) }
+            if (avatar != null) { Avatar(avatar, 44.dp, foto = avatarFoto, alTocar = alTocarAvatar); Spacer(Modifier.width(12.dp)) }
             Column(Modifier.weight(1f), horizontalAlignment = if (centrado) Alignment.CenterHorizontally else Alignment.Start) {
                 Text(titulo, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 if (subtitulo != null) Text(subtitulo, color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
@@ -119,13 +126,25 @@ fun MarcoPantalla(
     }
 }
 
+/** Foto de perfil circular; si no hay foto muestra las iniciales del nombre. */
 @Composable
-fun Avatar(nombre: String, tamano: Dp = 44.dp, fondo: Color = Color(0xFFDCE4F2)) {
+fun Avatar(
+    nombre: String,
+    tamano: Dp = 44.dp,
+    fondo: Color = Color(0xFFDCE4F2),
+    foto: String = "",
+    alTocar: (() -> Unit)? = null
+) {
     val iniciales = nombre.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }.ifBlank { "?" }
+    val imagen = remember(foto) { FotoPerfil.aBitmap(foto)?.asImageBitmap() }
     Box(
-        Modifier.size(tamano).clip(CircleShape).background(fondo).border(2.dp, Color.White, CircleShape),
+        Modifier.size(tamano).clip(CircleShape).background(fondo).border(2.dp, Color.White, CircleShape)
+            .then(if (alTocar != null) Modifier.clickable(onClick = alTocar) else Modifier),
         contentAlignment = Alignment.Center
-    ) { Text(iniciales, color = AzulMarino, fontWeight = FontWeight.Bold, fontSize = (tamano.value * 0.36f).sp) }
+    ) {
+        if (imagen != null) Image(imagen, "Foto de perfil de $nombre", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Text(iniciales, color = AzulMarino, fontWeight = FontWeight.Bold, fontSize = (tamano.value * 0.36f).sp)
+    }
 }
 
 @Composable

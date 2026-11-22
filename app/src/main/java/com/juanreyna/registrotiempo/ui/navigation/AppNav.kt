@@ -27,6 +27,7 @@ import com.juanreyna.registrotiempo.ui.components.Cargando
 import com.juanreyna.registrotiempo.ui.login.FirebaseSinConfigurarScreen
 import com.juanreyna.registrotiempo.ui.login.LoginScreen
 import com.juanreyna.registrotiempo.ui.login.RegistroScreen
+import com.juanreyna.registrotiempo.ui.perfil.PerfilScreen
 
 private fun rutaDe(d: Destino) = when (d) {
     Destino.Cargando -> "cargando"
@@ -75,14 +76,16 @@ fun AppNav(sesion: SesionViewModel = hiltViewModel()) {
             )
         }
         composable("admin/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) {
-            AdminScreen(infoVip(estado), { nav.navigate("vip") }, sesion::cerrarBanner, { nav.navigate("ajustes") })
+            AdminScreen(infoVip(estado), { nav.navigate("vip") }, sesion::cerrarBanner, { nav.navigate("ajustes") }, alPerfil = { nav.navigate("perfil") })
         }
         composable("colaborador/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) {
-            ColaboradorScreen(infoVip(estado), { nav.navigate("vip") }, sesion::cerrarBanner, { nav.navigate("ajustes") })
+            ColaboradorScreen(infoVip(estado), { nav.navigate("vip") }, sesion::cerrarBanner, { nav.navigate("ajustes") }, alPerfil = { nav.navigate("perfil") })
         }
+        composable("perfil") { PerfilScreen(alVolver = { nav.popBackStack() }) }
         composable("ajustes") {
             AjustesScreen(
                 alVolver = { nav.popBackStack() },
+                alPerfil = { nav.navigate("perfil") },
                 alAcercaDe = { nav.navigate("acerca") },
                 alVip = { nav.navigate("vip") },
                 alCerrarSesion = { sesion.cerrarSesion(activity) }

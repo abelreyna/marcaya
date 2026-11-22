@@ -173,6 +173,7 @@ fun AdminScreen(
     alVerVip: () -> Unit,
     alCerrarBanner: () -> Unit,
     alAjustes: () -> Unit,
+    alPerfil: () -> Unit,
     vm: AdminViewModel = hiltViewModel()
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -190,6 +191,8 @@ fun AdminScreen(
             titulo = titulos[pestana],
             subtitulo = if (pestana == 0) "(Admin) · ${ui.empresa?.nombreComercial.orEmpty()}" else ui.empresa?.nombreComercial,
             avatar = if (pestana == 0) admin?.nombre ?: "A" else null,
+            avatarFoto = admin?.foto.orEmpty(),
+            alTocarAvatar = alPerfil,
             acciones = {
                 IconButton(onClick = { verNotificaciones = true }) {
                     androidx.compose.material3.BadgedBox(badge = { if (ui.alertas.isNotEmpty()) androidx.compose.material3.Badge { Text("${ui.alertas.size}") } }) {
@@ -299,7 +302,7 @@ private fun PestanaPanel(ui: UiAdmin) {
         items(ui.filas, key = { it.usuario.uid }) { f ->
             Seccion(fondo = tinteEstado(f.estado), borde = Borde) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(f.usuario.nombre, 48.dp)
+                    Avatar(f.usuario.nombre, 48.dp, foto = f.usuario.foto)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(f.usuario.nombre, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
@@ -375,7 +378,7 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
                     .border(1.dp, Borde, RoundedCornerShape(16.dp)).clickable { editando = u }.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Avatar(u.nombre, 44.dp)
+                Avatar(u.nombre, 44.dp, foto = u.foto)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(u.nombre, fontWeight = FontWeight.SemiBold)
@@ -435,7 +438,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
     var activo by remember { mutableStateOf(u.activo) }
     AlertDialog(
         onDismissRequest = alCerrar,
-        icon = { Avatar(u.nombre, 52.dp) },
+        icon = { Avatar(u.nombre, 72.dp, foto = u.foto) },
         title = { Text(u.nombre, fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {

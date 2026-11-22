@@ -29,6 +29,12 @@ service cloud.firestore {
         && getUserData().adminId == companyAdminId;
     }
 
+    // Foto de perfil: JPEG 320×320 en Base64 guardado en el perfil (sin Firebase Storage); tope de tamaño.
+    function fotoValida() {
+      return !('foto' in request.resource.data)
+        || (request.resource.data.foto is string && request.resource.data.foto.size() <= 200000);
+    }
+
     // ---------- Usuarios y perfiles ----------
     match /usuarios/{userId} {
       allow read: if isAuthenticated() && (
@@ -50,7 +56,7 @@ service cloud.firestore {
           && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje']))
       );
 
-      allow update: if isAuthenticated() && (
+      allow update: if isAuthenticated() && fotoValida() && (
         isAdminOfCompany(resource.data.adminId) ||
         (request.auth.uid == userId
           && !request.resource.data.diff(resource.data).affectedKeys()
