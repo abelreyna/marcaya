@@ -1,4 +1,4 @@
-package com.juanreyna.registrotiempo.ui.ajustes
+﻿package com.juanreyna.registrotiempo.ui.ajustes
 
 import android.content.Intent
 import android.net.Uri
@@ -70,7 +70,7 @@ import com.juanreyna.registrotiempo.ui.theme.Teal
 import com.juanreyna.registrotiempo.ui.theme.TextoSecundario
 
 private const val CORREO_AUTOR = "abel.reynago@gmail.com"
-private const val URL_REPOSITORIO = "https://github.com/abelreyna/registro-de-tiempo-de-personal"
+private const val URL_REPOSITORIO = "https://github.com/abelreyna/Registro_Personal"
 
 @Composable
 private fun Grupo(titulo: String, contenido: @Composable () -> Unit) {
