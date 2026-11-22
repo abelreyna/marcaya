@@ -24,6 +24,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Fullscreen
@@ -545,6 +550,7 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
     var alturaHoja by remember { mutableStateOf(0.dp) }
     var ampliado by rememberSaveable { mutableStateOf(false) }
     var recentrar by remember { mutableStateOf(false) }
+    var arrastre by remember { mutableFloatStateOf(0f) }
     fun alternarAmpliado() {
         ampliado = !ampliado
         recentrar = true
@@ -586,13 +592,30 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .onSizeChanged { alturaHoja = with(densidad) { it.height.toDp() } }
+                // Mientras se arrastra hacia abajo, la hoja acompaña al dedo.
+                .graphicsLayer { translationY = arrastre.coerceAtLeast(0f) }
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(Color.White)
                 .animateContentSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Asa de la hoja: tocar alterna; arrastrar hacia abajo amplía el mapa y hacia arriba lo reduce.
             Box(
-                Modifier.align(Alignment.CenterHorizontally).clickable { alternarAmpliado() }.padding(vertical = 4.dp, horizontal = 24.dp)
-            ) { Box(Modifier.size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(Borde)) }
+                Modifier.fillMaxWidth().height(28.dp)
+                    .draggable(
+                        orientation = Orientation.Vertical,
+                        state = rememberDraggableState { delta -> arrastre += delta },
+                        onDragStopped = {
+                            val umbral = with(densidad) { 40.dp.toPx() }
+                            when {
+                                arrastre > umbral && !ampliado -> alternarAmpliado()
+                                arrastre < -umbral && ampliado -> alternarAmpliado()
+                            }
+                            arrastre = 0f
+                        }
+                    )
+                    .clickable { alternarAmpliado() },
+                contentAlignment = Alignment.Center
+            ) { Box(Modifier.size(width = 48.dp, height = 5.dp).clip(RoundedCornerShape(50)).background(TextoSecundario.copy(alpha = 0.5f))) }
             if (ampliado) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
