@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import com.juanreyna.registrotiempo.ui.components.SelectorDocumento
 import com.juanreyna.registrotiempo.ui.login.CampoDigitos
 import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import androidx.compose.material.icons.filled.Logout
@@ -523,10 +524,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
         title = { Text(u.nombre, fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Documento de identidad", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TipoDocumento.entries.forEach { t -> ChipFiltro(t.nombreLargo, tipoDoc == t) { tipoDoc = t; dni = t.limpiar(dni) } }
-                }
+                SelectorDocumento(tipoDoc, { t -> tipoDoc = t; dni = t.limpiar(dni) })
                 CampoDigitos(dni, { dni = tipoDoc.limpiar(it) }, "Número de ${tipoDoc.etiqueta}", tipoDoc.digitos, error = !dniValido)
                 HorizontalDivider(color = Borde)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

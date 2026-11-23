@@ -1,9 +1,9 @@
 package com.juanreyna.registrotiempo.domain.model
 
 /** Documento de identidad aceptado en Perú, con la cantidad exacta de dígitos. */
-enum class TipoDocumento(val etiqueta: String, val nombreLargo: String, val digitos: Int) {
-    DNI("DNI", "Documento Nacional de Identidad", 8),
-    CE("C.E.", "Carnet de Extranjería", 9);
+enum class TipoDocumento(val etiqueta: String, val nombreLargo: String, val nombreCorto: String, val digitos: Int) {
+    DNI("DNI", "Documento Nacional de Identidad", "DNI", 8),
+    CE("C.E.", "Carnet de Extranjería", "Carnet de Extranjería", 9);
 
     fun esValido(numero: String) = numero.length == digitos && numero.all(Char::isDigit)
 

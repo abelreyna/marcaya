@@ -1,9 +1,8 @@
 package com.juanreyna.registrotiempo.ui.login
 
+import com.juanreyna.registrotiempo.ui.components.SelectorDocumento
 import com.juanreyna.registrotiempo.domain.model.Celular
 import com.juanreyna.registrotiempo.domain.model.TipoDocumento
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FilterChip
 import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -193,7 +192,7 @@ fun RegistroScreen(
     var nombre by rememberSaveable { mutableStateOf(nombreInicial) }
     var empresa by rememberSaveable { mutableStateOf("") }
     var dni by rememberSaveable { mutableStateOf("") }
-    var tipoDoc by rememberSaveable { mutableStateOf(TipoDocumento.DNI) }
+    var tipoDoc by rememberSaveable { mutableStateOf<TipoDocumento?>(null) }
     var telefono by rememberSaveable { mutableStateOf("") }
     var codigo by rememberSaveable { mutableStateOf("") }
 
@@ -216,27 +215,19 @@ fun RegistroScreen(
                 }
                 false -> {
                     Campo(nombre, { nombre = it }, "Nombre Completo")
-                    Text("Documento de identidad", style = MaterialTheme.typography.labelLarge, color = AzulMarino)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TipoDocumento.entries.forEach { t ->
-                            FilterChip(
-                                selected = tipoDoc == t,
-                                onClick = { tipoDoc = t; dni = t.limpiar(dni) },
-                                label = { Text(t.nombreLargo) },
-                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Teal, selectedLabelColor = Color.White)
-                            )
-                        }
+                    SelectorDocumento(tipoDoc, { t -> tipoDoc = t; dni = t.limpiar(dni) })
+                    tipoDoc?.let { t ->
+                        CampoDigitos(dni, { dni = t.limpiar(it) }, "Número de ${t.etiqueta}", t.digitos,
+                            error = dni.isNotEmpty() && dni.length < t.digitos)
                     }
-                    CampoDigitos(dni, { dni = tipoDoc.limpiar(it) }, "Número de ${tipoDoc.etiqueta}", tipoDoc.digitos,
-                        error = dni.isNotEmpty() && dni.length < tipoDoc.digitos)
                     CampoDigitos(telefono, { telefono = Celular.limpiar(it) }, "Número de celular", Celular.DIGITOS,
                         error = telefono.isNotEmpty() && !Celular.esValido(telefono) && (telefono.length == Celular.DIGITOS || telefono.first() != '9'),
                         prefijo = "+51 ", ayuda = "Debe empezar con 9", teclado = KeyboardType.Phone)
                     Campo(codigo, { codigo = it.uppercase().take(10) }, "Código de Administrador",
                         KeyboardOptions(capitalization = KeyboardCapitalization.Characters), obligatorio = true)
                     Text("Proporcionado por tu jefe (formato ADM-XXXX-X).", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-                    BotonPill("Registrarse", { alRegistrarColaborador(nombre.trim(), tipoDoc, dni, telefono, codigo.trim()) },
-                        enabled = !estado.procesando && nombre.isNotBlank() && tipoDoc.esValido(dni) && Celular.esValido(telefono) &&
+                    BotonPill("Registrarse", { tipoDoc?.let { alRegistrarColaborador(nombre.trim(), it, dni, telefono, codigo.trim()) } },
+                        enabled = !estado.procesando && nombre.isNotBlank() && tipoDoc?.esValido(dni) == true && Celular.esValido(telefono) &&
                             codigo.matches(Regex("ADM-\\d{4}-[A-Z]")))
                 }
                 null -> Text("Elige cómo usarás la aplicación.", color = TextoSecundario)
