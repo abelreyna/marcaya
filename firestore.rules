@@ -8,7 +8,7 @@ rules_version = '2';
 //  - aplicar el rate limiting de 60 s entre marcajes (campo usuarios.ultimoMarcaje),
 //  - exigir rostro solo al iniciar turno (Ingreso y Fin de Descanso); salidas sin rostro,
 //  - permitir al empleador registrar la salida de sus colaboradores (registradoPorAdmin),
-//  - permitir dar de baja / desvincular colaboradores y eliminar cuentas (colaborador y empresa completa),
+//  - permitir dar de baja / desvincular colaboradores y eliminar cuentas (propia, de un colaborador por su admin y empresa completa),
 //  - cubrir las colecciones codigos, justificaciones y alertas.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -35,6 +35,15 @@ service cloud.firestore {
     function empresaEnEliminacion(adminId) {
       return isAdminOfCompany(adminId)
         && get(/databases/$(database)/documents/empresas/$(adminId)).data.get('eliminando', false) == true;
+    }
+
+    // Registro (marcaje, justificación o alerta) de alguien que ya no pertenece al equipo del admin:
+    // su perfil fue eliminado o está vinculado a otra empresa. Solo así el admin puede borrar ese historial.
+    function deExColaborador(d) {
+      return isAdminOfCompany(d.adminId) && (
+        !exists(/databases/$(database)/documents/usuarios/$(d.colaboradorId))
+        || get(/databases/$(database)/documents/usuarios/$(d.colaboradorId)).data.adminId != d.adminId
+      );
     }
 
     // Foto de perfil: JPEG 320×320 en Base64 guardado en el perfil (sin Firebase Storage); tope de tamaño.
@@ -85,8 +94,11 @@ service cloud.firestore {
               || request.resource.data.ultimoMarcaje == request.time))
       );
 
-      // Cada usuario puede eliminar su propio perfil (eliminación de cuenta)
-      allow delete: if isAuthenticated() && request.auth.uid == userId;
+      // Cada usuario elimina su propio perfil; el admin puede eliminar el de un colaborador de su equipo
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == userId
+        || (resource.data.rol == 'COLABORADOR' && isAdminOfCompany(resource.data.adminId))
+      );
     }
 
     // ---------- Códigos de Administrador (ADM-XXXX-X) ----------
@@ -153,7 +165,8 @@ service cloud.firestore {
            == request.resource.data.adminId;
 
       allow update: if isAdminOfCompany(resource.data.adminId);
-      allow delete: if empresaEnEliminacion(resource.data.adminId); // solo al eliminar la empresa
+      // Solo al eliminar la empresa o el historial de un ex colaborador
+      allow delete: if empresaEnEliminacion(resource.data.adminId) || deExColaborador(resource.data);
     }
 
     // ---------- Justificaciones de incidencias ----------
@@ -168,7 +181,7 @@ service cloud.firestore {
         && request.resource.data.estado == 'PENDIENTE';
       allow update: if isAdminOfCompany(resource.data.adminId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'resuelto']);
-      allow delete: if empresaEnEliminacion(resource.data.adminId);
+      allow delete: if empresaEnEliminacion(resource.data.adminId) || deExColaborador(resource.data);
     }
 
     // ---------- Alertas antifraude / geocerca ----------
@@ -178,7 +191,7 @@ service cloud.firestore {
         && request.resource.data.colaboradorId == request.auth.uid
         && request.resource.data.adminId == getUserData().adminId;
       allow update: if false;
-      allow delete: if empresaEnEliminacion(resource.data.adminId);
+      allow delete: if empresaEnEliminacion(resource.data.adminId) || deExColaborador(resource.data);
     }
   }
 }

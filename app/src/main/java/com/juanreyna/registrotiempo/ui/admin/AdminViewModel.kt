@@ -145,6 +145,11 @@ class AdminViewModel @Inject constructor(
 
     fun desvincular(u: Usuario) = ejecutar("${u.nombre} fue desvinculado del equipo") { repo.desvincularColaborador(u) }
 
+    fun eliminarColaborador(u: Usuario, borrarHistorial: Boolean) =
+        ejecutar(if (borrarHistorial) "Cuenta e historial de ${u.nombre} eliminados" else "Cuenta de ${u.nombre} eliminada") {
+            repo.eliminarColaboradorPorAdmin(u, borrarHistorial)
+        }
+
     fun guardarGeocerca(g: Geocerca) = ejecutar("Geocerca guardada") { repo.guardarGeocerca(adminId, g) }
 
     fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean) =

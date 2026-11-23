@@ -152,6 +152,8 @@ fun ColaboradorScreen(
     // Si el empleador lo desvincula mientras la app está abierta, pasa a la pantalla "Sin empresa"
     val sinEmpresa = ui.usuario?.adminId?.isBlank() == true
     LaunchedEffect(sinEmpresa) { if (sinEmpresa) alQuedarSinEmpresa() }
+    val perfilEliminado by vm.perfilEliminado.collectAsStateWithLifecycle()
+    LaunchedEffect(perfilEliminado) { if (perfilEliminado) alQuedarSinEmpresa() }
     val mensaje by vm.mensaje.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var pestana by rememberSaveable { mutableIntStateOf(0) }

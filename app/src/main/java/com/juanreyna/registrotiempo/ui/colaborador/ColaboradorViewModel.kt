@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import kotlinx.coroutines.flow.map
 import com.juanreyna.registrotiempo.util.AvisosIncidencias
 import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
@@ -65,6 +66,9 @@ class ColaboradorViewModel @Inject constructor(
     val procesando = MutableStateFlow(false)
 
     private val usuario = repo.observarUsuario(uid).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** true cuando el servidor confirma que el perfil ya no existe (el empleador eliminó la cuenta). */
+    val perfilEliminado = repo.observarExistePerfil(uid).map { !it }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     private val empresa = usuario.filterNotNull().flatMapLatest { if (it.adminId.isBlank()) flowOf(null) else repo.observarEmpresa(it.adminId) }
     private val hoy = repo.observarMarcajesColaborador(uid, "fecha", Fechas.hoy())
     private val mes = mesSeleccionado.flatMapLatest { repo.observarMarcajesColaborador(uid, "mes", it) }

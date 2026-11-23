@@ -82,9 +82,21 @@ class SesionViewModel @Inject constructor(
             irA(s.rol, s.uid, s.adminId)
         }
         // Verificación contra Firestore
-        val perfil = runCatching { repo.obtenerUsuario(usuario.uid) }.getOrNull()
-        if (perfil == null) {
+        val consulta = runCatching { repo.obtenerUsuario(usuario.uid) }
+        // Sin conexión: se mantiene la ruta de la caché local
+        if (consulta.isFailure) {
             if (store.leer() == null) _estado.update { it.copy(destino = Destino.Registro) }
+            return@launch
+        }
+        val perfil = consulta.getOrNull()
+        if (perfil == null) {
+            // El perfil ya no existe (p. ej. el empleador eliminó la cuenta): se registra de nuevo
+            store.leer()?.let { s ->
+                if (s.adminId.isNotBlank()) runCatching { FirebaseMessaging.getInstance().unsubscribeFromTopic("empresa_${s.adminId}") }
+                store.limpiar()
+                Toast.makeText(getApplication(), "Tu perfil fue eliminado. Puedes registrarte de nuevo.", Toast.LENGTH_LONG).show()
+            }
+            _estado.update { it.copy(destino = Destino.Registro) }
             return@launch
         }
         store.guardar(SesionLocal(perfil.uid, perfil.rol, perfil.adminId))

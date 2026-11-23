@@ -447,8 +447,15 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
         item { Spacer(Modifier.height(8.dp)) }
     }
     var desvinculando by remember { mutableStateOf<Usuario?>(null) }
+    var eliminando by remember { mutableStateOf<Usuario?>(null) }
+    eliminando?.let { u ->
+        DialogoEliminarColaborador(u, alConfirmar = { borrarHistorial -> vm.eliminarColaborador(u, borrarHistorial); eliminando = null }, alCerrar = { eliminando = null })
+    }
     editando?.let { u ->
-        DialogoColaborador(u, e.moneda.simbolo, alCerrar = { editando = null }, alDesvincular = { editando = null; desvinculando = u }) { cfg, horario, activo ->
+        DialogoColaborador(
+            u, e.moneda.simbolo, alCerrar = { editando = null }, alDesvincular = { editando = null; desvinculando = u },
+            alEliminar = { editando = null; eliminando = u }
+        ) { cfg, horario, activo ->
             vm.guardarColaborador(u, cfg, horario, activo); editando = null
         }
     }
@@ -494,7 +501,7 @@ private fun ChipFiltro(texto: String, seleccionado: Boolean, onClick: () -> Unit
 }
 
 @Composable
-private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alDesvincular: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean) -> Unit) {
+private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alDesvincular: () -> Unit, alEliminar: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean) -> Unit) {
     var cfg by remember { mutableStateOf(u.configPago) }
     var tarifa by remember { mutableStateOf(if (cfg.tarifaPorHora > 0) cfg.tarifaPorHora.toString() else "") }
     var sueldo by remember { mutableStateOf(if (cfg.sueldoBase > 0) cfg.sueldoBase.toString() else "") }
@@ -589,6 +596,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                     Switch(activo, { activo = it }, colors = SwitchDefaults.colors(checkedTrackColor = Teal))
                 }
                 TextButton(onClick = alDesvincular) { Text("Desvincular del equipo", color = Rojo) }
+                TextButton(onClick = alEliminar) { Text("Eliminar cuenta del colaborador", color = Rojo, fontWeight = FontWeight.SemiBold) }
             }
         },
         confirmButton = {

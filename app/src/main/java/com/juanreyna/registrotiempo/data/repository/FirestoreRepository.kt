@@ -1,5 +1,8 @@
 package com.juanreyna.registrotiempo.data.repository
 
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -42,6 +45,14 @@ class FirestoreRepository @Inject constructor() {
     // ---------- Perfiles ----------
     suspend fun obtenerUsuario(uid: String): Usuario? =
         usuarios.document(uid).get().await().takeIf { it.exists() }?.aUsuario()
+
+    /** true/false según exista el perfil en el servidor (ignora la caché local para no confundir "sin conexión" con "eliminado"). */
+    fun observarExistePerfil(uid: String): Flow<Boolean> = callbackFlow {
+        val reg = usuarios.document(uid).addSnapshotListener { s, _ ->
+            if (s != null && !s.metadata.isFromCache) trySend(s.exists())
+        }
+        awaitClose { reg.remove() }
+    }
 
     fun observarUsuario(uid: String): Flow<Usuario?> = callbackFlow {
         val reg = usuarios.document(uid).addSnapshotListener { s, _ ->
@@ -359,8 +370,8 @@ class FirestoreRepository @Inject constructor() {
         empresas.document(adminId).update("eliminando", true).await()
         progreso("Desvinculando colaboradores…")
         usuarios.whereEqualTo("adminId", adminId).whereEqualTo("rol", Rol.COLABORADOR.name).get().await()
-            .documents.chunked(400).forEach { lote ->
-                val b = db.batch(); lote.forEach { b.update(it.reference, camposDesvinculo) }; b.commit().await()
+            .documents.chunked(50).forEach { lote ->
+                coroutineScope { lote.map { async { it.reference.update(camposDesvinculo).await() } }.awaitAll() }
             }
         progreso("Borrando marcajes…"); borrarConsulta(marcajes.whereEqualTo("adminId", adminId))
         progreso("Borrando justificaciones…"); borrarConsulta(justificaciones.whereEqualTo("adminId", adminId))
@@ -375,11 +386,32 @@ class FirestoreRepository @Inject constructor() {
         b.commit().await()
     }
 
+    /**
+     * El administrador elimina la cuenta de un colaborador de su equipo.
+     * Se borra su perfil (datos personales y foto); si vuelve a entrar con su cuenta de Google, deberá registrarse desde cero.
+     * Sin [borrarHistorial] sus marcajes se conservan en los reportes (registro de asistencia exigido por ley);
+     * con [borrarHistorial] también se borran sus marcajes, justificaciones y alertas.
+     * El acceso de Google (Firebase Authentication) solo puede borrarlo el propio usuario en el plan gratuito.
+     */
+    suspend fun eliminarColaboradorPorAdmin(u: Usuario, borrarHistorial: Boolean) {
+        val adminId = u.adminId
+        val b = db.batch()
+        b.set(exColaboradores(adminId).document(u.uid), copiaExColaborador(u, "ELIMINADO_POR_ADMIN"))
+        b.delete(usuarios.document(u.uid))
+        b.commit().await()
+        if (!borrarHistorial) return
+        borrarConsulta(marcajes.whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", u.uid))
+        borrarConsulta(justificaciones.whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", u.uid))
+        borrarConsulta(db.collection("alertas").whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", u.uid))
+        exColaboradores(adminId).document(u.uid).delete().await()
+    }
+
+    /** Borra todo lo que devuelve la consulta, un documento por escritura (las reglas consultan otros documentos y los lotes tienen tope). */
     private suspend fun borrarConsulta(q: com.google.firebase.firestore.Query) {
         while (true) {
-            val docs = q.limit(400).get().await().documents
+            val docs = q.limit(100).get().await().documents
             if (docs.isEmpty()) return
-            val b = db.batch(); docs.forEach { b.delete(it.reference) }; b.commit().await()
+            coroutineScope { docs.map { async { it.reference.delete().await() } }.awaitAll() }
         }
     }
 }
