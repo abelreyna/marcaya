@@ -224,7 +224,7 @@ object ReportExporter {
             }
         }
         l.linea("")
-        l.linea("Montos por día = horas ordinarias × valor hora + horas extras con recargo. Los totales del mes incluyen asignación familiar, descuentos y aportes según la boleta.", Paint(l.normal).apply { textSize = 7f })
+        l.linea("Montos por día = horas ordinarias × valor hora + horas extras (Simple: sin recargo; Avanzado Perú: +25 % / +35 %). Los totales del mes incluyen asignación familiar, descuentos y aportes según la boleta.", Paint(l.normal).apply { textSize = 7f })
         val f = File(carpeta(context), "costos_${mesEtiqueta.replace(" ", "_")}.pdf")
         l.terminar(f)
         return f

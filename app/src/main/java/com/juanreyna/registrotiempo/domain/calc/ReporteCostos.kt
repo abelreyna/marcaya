@@ -35,8 +35,8 @@ data class CostoColaborador(
 
 /**
  * Reporte de costos (salarios): cuánto se pagó por día, por colaborador y en el mes.
- * - Monto del día = horas ordinarias × valor hora + horas extras con recargo
- *   (Modo Simple: recargo configurado; Modo Avanzado: 25 % las 2 primeras y 35 % desde la tercera).
+ * - Monto del día = horas ordinarias × valor hora + horas extras
+ *   (Modo Simple: extras a la misma tarifa, sin recargo; Modo Avanzado: +25 % las 2 primeras y +35 % desde la tercera).
  * - Valor hora: Modo Simple = tarifa por hora; Modo Avanzado = sueldo base ÷ 240 h.
  * - Los totales del mes (asignación familiar, descuentos, aportes y provisiones) salen de la boleta.
  */
@@ -48,7 +48,7 @@ object ReporteCostos {
     fun costoDia(u: Usuario, d: DiaTrabajado, p: ParametrosLegales = ParametrosLegales()): CostoDia {
         val cfg = u.configPago
         val vh = valorHora(cfg, p)
-        val (r1, r2) = if (cfg.modo == ModoPago.SIMPLE) cfg.recargoExtra1 to cfg.recargoExtra2 else 25.0 to 35.0
+        val (r1, r2) = if (cfg.modo == ModoPago.SIMPLE) 0.0 to 0.0 else 25.0 to 35.0
         val extraH = d.minutosExtra / 60.0
         val tramo1 = extraH.coerceAtMost(2.0)
         val tramo2 = (extraH - 2.0).coerceAtLeast(0.0)

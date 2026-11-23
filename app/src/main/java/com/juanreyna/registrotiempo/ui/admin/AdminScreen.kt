@@ -520,8 +520,6 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
     var sueldo by remember { mutableStateOf(if (cfg.sueldoBase > 0) cfg.sueldoBase.toString() else "") }
     var horario by remember { mutableStateOf(u.horario) }
     var tolerancia by remember { mutableStateOf(u.horario.toleranciaMin.toString()) }
-    var recargo1 by remember { mutableStateOf(formatoPct(cfg.recargoExtra1)) }
-    var recargo2 by remember { mutableStateOf(formatoPct(cfg.recargoExtra2)) }
     val toleranciaMin = tolerancia.toIntOrNull()
     val horarioValido = horario.minutosJornadaProgramada > 0 && toleranciaMin != null && toleranciaMin in 0..60
     var activo by remember { mutableStateOf(u.activo) }
@@ -539,15 +537,9 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                     ChipFiltro("Avanzado Perú", cfg.modo == ModoPago.AVANZADO) { cfg = cfg.copy(modo = ModoPago.AVANZADO) }
                 }
                 if (cfg.modo == ModoPago.SIMPLE) {
-                    OutlinedTextField(tarifa, { tarifa = it }, label = { Text("Pago por Hora Ordinaria ($mon)") }, shape = FormaCampo,
+                    OutlinedTextField(tarifa, { tarifa = it }, label = { Text("Pago por hora ($mon)") }, shape = FormaCampo,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    Text("Recargo por horas extras", fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(recargo1, { recargo1 = it.take(5) }, Modifier.weight(1f), label = { Text("2 primeras h (%)") },
-                            shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                        OutlinedTextField(recargo2, { recargo2 = it.take(5) }, Modifier.weight(1f), label = { Text("Desde la 3.ª h (%)") },
-                            shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    }
+                    Text("Horas extras: se pagan a la misma tarifa por hora, sin recargo.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
                 } else {
                     OutlinedTextField(sueldo, { sueldo = it }, label = { Text("Sueldo base mensual ($mon)") }, shape = FormaCampo,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
@@ -572,6 +564,8 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                         Text("Comisión mixta (sin comisión flujo)", Modifier.weight(1f))
                         Switch(cfg.comisionMixta, { cfg = cfg.copy(comisionMixta = it) }, colors = SwitchDefaults.colors(checkedTrackColor = Teal))
                     }
+                    Text("Horas extras con recargo de ley: +25 % las 2 primeras horas del día y +35 % desde la tercera.",
+                        style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
                 }
                 Text("Horario de trabajo", fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -621,9 +615,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                 alGuardar(
                     cfg.copy(
                         tarifaPorHora = tarifa.replace(',', '.').toDoubleOrNull() ?: 0.0,
-                        sueldoBase = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0,
-                        recargoExtra1 = recargo1.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 25.0,
-                        recargoExtra2 = recargo2.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 35.0
+                        sueldoBase = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0
                     ), horario.copy(toleranciaMin = toleranciaMin ?: 5), activo, tipoDoc, dni
                 )
             }, enabled = horarioValido && dniValido) { Text("Guardar", color = Teal, fontWeight = FontWeight.Bold) }
@@ -631,8 +623,6 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } }
     )
 }
-
-private fun formatoPct(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
 
 /** Campo de hora que abre el reloj del sistema (formato 24 h). */
 @Composable

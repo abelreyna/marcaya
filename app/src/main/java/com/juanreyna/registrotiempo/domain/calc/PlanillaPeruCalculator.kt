@@ -86,13 +86,16 @@ object PlanillaPeruCalculator {
     private fun tramosExtra(dias: List<HorasDia>): Pair<Double, Double> =
         dias.sumOf { it.extra.coerceAtMost(2.0) } to dias.sumOf { (it.extra - 2.0).coerceAtLeast(0.0) }
 
-    /** Modo Simple: horas × tarifa, sin descuentos; extras con el recargo configurado por el administrador. */
+    /**
+     * Modo Simple: horas × tarifa, sin descuentos. Las horas extras se pagan a la misma tarifa, sin recargo
+     * (los recargos legales del 25 % / 35 % solo se aplican en el Modo Avanzado Perú).
+     */
     private fun modoSimple(config: ConfigPago, dias: List<HorasDia>): Boleta {
         val horas = dias.sumOf { it.ordinarias }
         val (he1, he2) = tramosExtra(dias)
+        val extras = he1 + he2
         val t = config.tarifaPorHora
-        val montoHe1 = (he1 * t * (1 + config.recargoExtra1 / 100)).r2()
-        val montoHe2 = (he2 * t * (1 + config.recargoExtra2 / 100)).r2()
+        val montoExtras = (extras * t).r2()
         return Boleta(
             modo = ModoPago.SIMPLE,
             horasOrdinarias = horas,
@@ -100,16 +103,13 @@ object PlanillaPeruCalculator {
             horasExtra35 = he2,
             ingresos = buildList {
                 add(LineaBoleta("Horas trabajadas (${"%.2f".format(horas)} h × ${"%.2f".format(t)})", (horas * t).r2()))
-                if (montoHe1 > 0) add(LineaBoleta("Horas extras +${pct(config.recargoExtra1)} (${"%.2f".format(he1)} h)", montoHe1))
-                if (montoHe2 > 0) add(LineaBoleta("Horas extras +${pct(config.recargoExtra2)} (${"%.2f".format(he2)} h)", montoHe2))
+                if (montoExtras > 0) add(LineaBoleta("Horas extras sin recargo (${"%.2f".format(extras)} h × ${"%.2f".format(t)})", montoExtras))
             },
             descuentos = emptyList(),
             aportesEmpleador = emptyList(),
             provisiones = emptyList()
         )
     }
-
-    private fun pct(v: Double) = if (v % 1.0 == 0.0) "${v.toInt()} %" else "${"%.1f".format(v)} %"
 
     private fun modoAvanzado(config: ConfigPago, dias: List<HorasDia>, p: ParametrosLegales): Boleta {
         val valorHora = config.sueldoBase / p.horasMensualesBase

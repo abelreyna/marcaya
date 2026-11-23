@@ -99,7 +99,7 @@ internal fun ReporteCostosSeccion(resumen: List<ResumenColaborador>, mon: String
         BotonPill("Exportar costos en PDF", { alExportar("COSTOS_PDF") }, icono = Icons.Default.PictureAsPdf, alto = 52.dp)
         BotonPill("Exportar costos en Excel (CSV)", { alExportar("COSTOS_CSV") }, icono = Icons.Default.TableChart, alto = 52.dp, color = AzulMarino)
         Text(
-            "Pago del día = horas ordinarias × valor hora + horas extras con recargo. El neto y el costo del empleador incluyen asignación familiar, descuentos y aportes de la boleta.",
+            "Pago del día = horas ordinarias × valor hora + horas extras (Simple: sin recargo; Avanzado Perú: +25 % / +35 %). El neto y el costo del empleador incluyen asignación familiar, descuentos y aportes de la boleta.",
             style = MaterialTheme.typography.bodySmall, color = TextoSecundario
         )
     }

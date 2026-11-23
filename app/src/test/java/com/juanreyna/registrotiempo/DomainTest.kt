@@ -82,9 +82,13 @@ class DomainTest {
         assertEquals(150L, dia.minutosExtra)           // 17:00 → 19:30
         assertEquals(595L, dia.minutosEfectivos)       // el exceso de descanso no cuenta como trabajado
 
-        // Modo Simple con recargo configurable 25 % / 35 %: 445 min ordinarios + 2 h al 25 % + 0.5 h al 35 %
+        // Modo Simple: 445 min ordinarios + 2.5 h extras a la misma tarifa, sin recargo
         val b = PlanillaPeruCalculator.calcularDias(ConfigPago(modo = ModoPago.SIMPLE, tarifaPorHora = 10.0), listOf(dia.horas))
-        assertEquals(74.17 + 25.0 + 6.75, b.totalIngresos, 0.01)
+        assertEquals(74.17 + 25.0, b.totalIngresos, 0.01)
+        // Modo Avanzado Perú: mismas horas con recargos de ley (+25 % las 2 primeras, +35 % desde la tercera)
+        val bAv = PlanillaPeruCalculator.calcularDias(ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 2400.0), listOf(dia.horas))
+        assertEquals(2 * 10.0 * 1.25, bAv.ingresos.first { it.concepto.startsWith("Horas extras 25") }.monto, 0.01)
+        assertEquals(0.5 * 10.0 * 1.35, bAv.ingresos.first { it.concepto.startsWith("Horas extras 35") }.monto, 0.01)
 
         // Dentro de la tolerancia no hay tardanza ni extras
         val puntual = listOf(
