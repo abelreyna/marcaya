@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import com.juanreyna.registrotiempo.domain.calc.ReglasMarcaje
 import kotlinx.coroutines.flow.map
 import com.juanreyna.registrotiempo.util.AvisosIncidencias
 import com.juanreyna.registrotiempo.domain.model.Horario
@@ -122,6 +123,9 @@ class ColaboradorViewModel @Inject constructor(
         if (bloqueadoPorVip) { mensaje.value = "Periodo gratuito finalizado: activa el plan VIP para registrar nuevos marcajes."; return@launch }
         if (tipo !in siguientesPermitidos()) { mensaje.value = "Marcaje no permitido en este momento"; return@launch }
         if (tipo.requiereRostro && !validacionFacial) { mensaje.value = "Se requiere verificación facial"; return@launch }
+        if (tipo == TipoMarcaje.INGRESO && !u.horario.trabajaEl(Fechas.diaSemanaIso(Fechas.hoy()))) {
+            mensaje.value = "Hoy no es día laborable en tu horario. Pide a tu administrador que habilite este día."; return@launch
+        }
         val ultimo = ui.value.marcajesHoy.mapNotNull { it.timestampMillis }.maxOrNull()
         if (ultimo != null && System.currentTimeMillis() - ultimo < 60_000) {
             mensaje.value = "Espera al menos 60 segundos entre marcajes"; return@launch
@@ -155,24 +159,12 @@ class ColaboradorViewModel @Inject constructor(
         }
     }
 
-    /** Tardanza, exceso de descanso o salida anticipada del marcaje que se acaba de registrar (hora aproximada local). */
-    private fun incidenciaAlMarcar(u: Usuario, tipo: TipoMarcaje): Pair<TipoIncidencia, String>? {
-        val h = u.horario
-        val tol = h.toleranciaMin
-        val ahora = System.currentTimeMillis()
-        val min = Fechas.minutosDelDia(ahora)
-        val hora = Fechas.hhmm(ahora)
-        return when (tipo) {
-            TipoMarcaje.INGRESO -> (min - Horario.minutos(h.entrada)).takeIf { it in (tol + 1)..(12 * 60) }
-                ?.let { TipoIncidencia.TARDANZA to "Ingresó a las $hora · $it min tarde (entrada ${h.entrada})" }
-            TipoMarcaje.FIN_DESCANSO -> ui.value.marcajesHoy.lastOrNull { it.tipo == TipoMarcaje.INICIO_DESCANSO }?.timestampMillis
-                ?.let { ((ahora - it) / 60_000 - h.minutosDescansoProgramado).toInt() }?.takeIf { it > tol }
-                ?.let { TipoIncidencia.EXCESO_DESCANSO to "Regresó del descanso a las $hora · $it min de exceso" }
-            TipoMarcaje.SALIDA -> (Horario.minutos(h.salida) - min).takeIf { it in (tol + 1)..(12 * 60) }
-                ?.let { TipoIncidencia.SALIDA_ANTICIPADA to "Salió a las $hora · $it min antes (salida ${h.salida})" }
-            else -> null
-        }
-    }
+    /** Incidencia del marcaje recién registrado frente al horario (tardanza, descanso fuera de horario, retorno tardío, salida antes o después). */
+    private fun incidenciaAlMarcar(u: Usuario, tipo: TipoMarcaje): Pair<TipoIncidencia, String>? =
+        ReglasMarcaje.evaluar(
+            u.horario, tipo, System.currentTimeMillis(),
+            ui.value.marcajesHoy.lastOrNull { it.tipo == TipoMarcaje.INICIO_DESCANSO }?.timestampMillis
+        )?.let { it.tipo to it.detalle }
 
     fun enviarJustificacion(motivo: MotivoJustificacion, detalle: String, fecha: String, incidencia: TipoIncidencia?) = viewModelScope.launch {
         val u = ui.value.usuario ?: return@launch

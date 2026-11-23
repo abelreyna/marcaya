@@ -575,6 +575,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                     CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { horario = horario.copy(inicioDescanso = it) }
                     CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { horario = horario.copy(finDescanso = it) }
                 }
+                SelectorDias(horario.diasLaborables) { horario = horario.copy(diasLaborables = it) }
                 OutlinedTextField(
                     tolerancia, { tolerancia = it.filter(Char::isDigit).take(2) }, label = { Text("Tolerancia (minutos)") },
                     shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

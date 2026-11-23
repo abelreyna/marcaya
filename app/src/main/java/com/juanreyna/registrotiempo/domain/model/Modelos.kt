@@ -46,8 +46,10 @@ enum class EstadoJustificacion { PENDIENTE, APROBADA, RECHAZADA }
 enum class TipoIncidencia(val etiqueta: String) {
     FALTA("Falta (inasistencia)"),
     TARDANZA("Tardanza en ingreso"),
+    DESCANSO_FUERA_HORARIO("Descanso fuera de horario"),
+    EXCESO_DESCANSO("Retorno tardío del descanso"),
     SALIDA_ANTICIPADA("Salida anticipada"),
-    EXCESO_DESCANSO("Exceso de descanso"),
+    SALIDA_TARDIA("Salida después del horario"),
     SIN_SALIDA("No marcó salida"),
     FUERA_GEOCERCA("Marcaje fuera de la zona")
 }
@@ -63,18 +65,20 @@ enum class EstadoIncidencia(val etiqueta: String) {
 /** Motivos de justificación; [aplica] indica a qué incidencias corresponde (vacío = a todas). */
 enum class MotivoJustificacion(val etiqueta: String, val aplica: Set<TipoIncidencia> = emptySet()) {
     DESCANSO_MEDICO("Enfermedad / descanso médico", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA)),
-    CITA_MEDICA("Cita médica", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO)),
-    EMERGENCIA_FAMILIAR("Emergencia familiar", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO)),
+    CITA_MEDICA("Cita médica", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO, TipoIncidencia.DESCANSO_FUERA_HORARIO)),
+    EMERGENCIA_FAMILIAR("Emergencia familiar", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO, TipoIncidencia.DESCANSO_FUERA_HORARIO)),
     DUELO("Fallecimiento de familiar (duelo)", setOf(TipoIncidencia.FALTA, TipoIncidencia.SALIDA_ANTICIPADA)),
     TRANSPORTE("Problemas de transporte / tránsito", setOf(TipoIncidencia.TARDANZA, TipoIncidencia.EXCESO_DESCANSO)),
-    PERMISO_AUTORIZADO("Permiso autorizado por el jefe", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO)),
+    PERMISO_AUTORIZADO("Permiso autorizado por el jefe", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO, TipoIncidencia.DESCANSO_FUERA_HORARIO, TipoIncidencia.SALIDA_TARDIA)),
+    HORAS_EXTRA("Horas extras / trabajo pendiente", setOf(TipoIncidencia.SALIDA_TARDIA, TipoIncidencia.DESCANSO_FUERA_HORARIO)),
+    ATENCION_CLIENTE("Atención a cliente o urgencia del trabajo", setOf(TipoIncidencia.SALIDA_TARDIA, TipoIncidencia.DESCANSO_FUERA_HORARIO, TipoIncidencia.EXCESO_DESCANSO)),
     VACACIONES("Vacaciones", setOf(TipoIncidencia.FALTA)),
     LICENCIA("Licencia (maternidad, paternidad u otra)", setOf(TipoIncidencia.FALTA)),
     TRAMITE("Trámite personal / judicial", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA)),
     COMISION_SERVICIOS("Comisión de servicios", setOf(TipoIncidencia.FALTA, TipoIncidencia.FUERA_GEOCERCA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.TARDANZA)),
     TRABAJO_CAMPO("Trabajo de campo", setOf(TipoIncidencia.FUERA_GEOCERCA, TipoIncidencia.FALTA, TipoIncidencia.SIN_SALIDA)),
     CAPACITACION("Capacitación / curso", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA)),
-    OLVIDO_MARCAJE("Olvidé marcar", setOf(TipoIncidencia.SIN_SALIDA)),
+    OLVIDO_MARCAJE("Olvidé marcar a tiempo", setOf(TipoIncidencia.SIN_SALIDA, TipoIncidencia.SALIDA_TARDIA, TipoIncidencia.DESCANSO_FUERA_HORARIO, TipoIncidencia.EXCESO_DESCANSO)),
     PROBLEMA_TECNICO("Problemas técnicos (app / GPS / celular)"),
     OTRO("Otro");
 

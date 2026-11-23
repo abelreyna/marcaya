@@ -1,5 +1,8 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import com.juanreyna.registrotiempo.ui.admin.diasTexto
+import com.juanreyna.registrotiempo.ui.components.TarjetaAviso
+import androidx.compose.material.icons.filled.EventBusy
 import com.juanreyna.registrotiempo.ui.components.AvisoIncidencias
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -225,12 +228,18 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
     val resumenHoy = JornadaCalculator.resumir(ui.marcajesHoy, ui.ahora)
     val permitidos = JornadaCalculator.siguientesPermitidos(ui.marcajesHoy.lastOrNull()?.tipo)
     val mon = empresa.moneda.simbolo
-    val activo = { t: TipoMarcaje -> !procesando && !bloqueado && t in permitidos }
+    // Día no laborable (p. ej. domingo sin habilitar): no se puede iniciar jornada; una jornada abierta sí puede cerrarse
+    val diaLaborable = ui.usuario.horario.trabajaEl(Fechas.diaSemanaIso(Fechas.hoy()))
+    val activo = { t: TipoMarcaje -> !procesando && !bloqueado && t in permitidos && (t != TipoMarcaje.INGRESO || diaLaborable) }
     val valorHora = if (cfg.modo == ModoPago.SIMPLE) cfg.tarifaPorHora else cfg.sueldoBase / 240.0
     val pagoHoy = resumenHoy.horasEfectivas * valorHora
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (porJustificar > 0) AvisoIncidencias(porJustificar, alJustificar)
+        if (!diaLaborable && ui.marcajesHoy.isEmpty()) TarjetaAviso(
+            Icons.Default.EventBusy, "Hoy no es día laborable",
+            "Tu horario es ${ui.usuario.horario.diasTexto()}. Si te toca trabajar hoy, pide a tu administrador que habilite este día.", Ambar
+        )
         // Recuadro "Selfie de Validación"
         Box(
             Modifier.fillMaxWidth().heightIn(min = 170.dp).clip(RoundedCornerShape(20.dp)).background(AzulMarino).padding(vertical = 14.dp, horizontal = 16.dp),

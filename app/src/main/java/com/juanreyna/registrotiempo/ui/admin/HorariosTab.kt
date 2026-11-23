@@ -1,5 +1,11 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,6 +68,27 @@ internal fun Horario.diasTexto(): String {
     return if (d.size > 2 && d.zipWithNext().all { (a, b) -> b == a + 1 }) "${n[d.first() - 1]}–${n[d.last() - 1]}" else d.joinToString(", ") { n[it - 1] }
 }
 
+/** Días laborables L–D: el día marcado permite marcar ingreso; debe quedar al menos uno. */
+@Composable
+internal fun SelectorDias(dias: List<Int>, alCambiar: (List<Int>) -> Unit) {
+    Text("Días laborables (permiten marcar ingreso)", style = MaterialTheme.typography.labelLarge, color = TextoSecundario)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        listOf("L", "M", "M", "J", "V", "S", "D").forEachIndexed { idx, letra ->
+            val dia = idx + 1
+            val activo = dia in dias
+            Box(
+                Modifier.size(38.dp).clip(CircleShape).background(if (activo) Teal else Color.White)
+                    .border(1.dp, if (activo) Teal else Borde, CircleShape)
+                    .clickable {
+                        val nuevos = if (activo) dias - dia else (dias + dia).sorted()
+                        if (nuevos.isNotEmpty()) alCambiar(nuevos)
+                    },
+                contentAlignment = Alignment.Center
+            ) { Text(letra, color = if (activo) Color.White else AzulMarino, fontWeight = FontWeight.SemiBold) }
+        }
+    }
+}
+
 /**
  * Pestaña "Horarios": el administrador define un horario y elige qué colaboradores lo usan
  * (uno, un grupo o todo el equipo). Muestra los horarios vigentes agrupados para seleccionar grupos.
@@ -90,6 +117,27 @@ internal fun PestanaHorarios(vm: AdminViewModel, ui: UiAdmin) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { Spacer(Modifier.height(6.dp)) }
+        if (cols.isNotEmpty()) item {
+            // Interruptor rápido: domingo laborable para todo el equipo
+            val conDomingo = cols.count { 7 in it.horario.diasLaborables }
+            Seccion("Marcaje en domingo", borde = Borde) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (conDomingo) {
+                                0 -> "Deshabilitado: nadie puede marcar ingreso los domingos."
+                                cols.size -> "Habilitado para todo el equipo."
+                                else -> "Habilitado para $conDomingo de ${cols.size} colaboradores."
+                            },
+                            style = MaterialTheme.typography.bodySmall, color = TextoSecundario
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Switch(conDomingo == cols.size, { vm.habilitarDomingo(it) }, colors = SwitchDefaults.colors(checkedTrackColor = Teal))
+                }
+                Text("Para elegir otros días o solo algunos colaboradores, usa los días laborables de abajo.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            }
+        }
         item {
             Seccion("1. Define el horario", borde = Borde) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,24 +148,7 @@ internal fun PestanaHorarios(vm: AdminViewModel, ui: UiAdmin) {
                     CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { horario = horario.copy(inicioDescanso = it) }
                     CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { horario = horario.copy(finDescanso = it) }
                 }
-                Text("Días laborables", style = MaterialTheme.typography.labelLarge, color = TextoSecundario)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    listOf("L", "M", "M", "J", "V", "S", "D").forEachIndexed { idx, letra ->
-                        val dia = idx + 1
-                        val activo = dia in horario.diasLaborables
-                        androidx.compose.material3.FilterChip(
-                            selected = activo,
-                            onClick = {
-                                val nuevos = if (activo) horario.diasLaborables - dia else (horario.diasLaborables + dia).sorted()
-                                if (nuevos.isNotEmpty()) horario = horario.copy(diasLaborables = nuevos)
-                            },
-                            label = { Text(letra) },
-                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = com.juanreyna.registrotiempo.ui.theme.Teal, selectedLabelColor = androidx.compose.ui.graphics.Color.White
-                            )
-                        )
-                    }
-                }
+                SelectorDias(horario.diasLaborables) { horario = horario.copy(diasLaborables = it) }
                 OutlinedTextField(
                     tolerancia, { tolerancia = it.filter(Char::isDigit).take(2) }, Modifier.fillMaxWidth(),
                     label = { Text("Tolerancia (minutos)") }, shape = FormaCampo, singleLine = true,

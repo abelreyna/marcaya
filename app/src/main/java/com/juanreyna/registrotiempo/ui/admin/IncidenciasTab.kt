@@ -1,5 +1,9 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import com.juanreyna.registrotiempo.domain.model.Incidencia
+import androidx.compose.runtime.remember
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +72,23 @@ internal fun PestanaIncidencias(vm: AdminViewModel, ui: UiAdmin) {
     val incidencias by vm.incidencias.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.cargarIncidencias() }
     var filtro by rememberSaveable { mutableStateOf(Filtro.REVISAR) }
+    var salidaDe by remember { mutableStateOf<Incidencia?>(null) }
+    salidaDe?.let { i ->
+        val programada = ui.colaboradores.firstOrNull { it.uid == i.colaboradorId }?.horario?.salida ?: "17:00"
+        var hora by remember(i.clave) { mutableStateOf(programada) }
+        AlertDialog(
+            onDismissRequest = { salidaDe = null },
+            title = { Text("Salida del ${i.fecha}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("${i.colaboradorNombre} no marcó su salida ese día. Indica la hora en que salió.", style = MaterialTheme.typography.bodyMedium)
+                    CampoHora("Salida", hora, Modifier.fillMaxWidth()) { hora = it }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.marcarSalidaDia(i, hora); salidaDe = null }) { Text("Registrar salida", color = Teal, fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton(onClick = { salidaDe = null }) { Text("Cancelar") } }
+        )
+    }
     val lista = incidencias
     val porRevisar = ui.justificaciones.filter { it.estado == EstadoJustificacion.PENDIENTE }
     val sinJustificar = lista.orEmpty().filter { it.estado == EstadoIncidencia.POR_JUSTIFICAR }
@@ -119,7 +140,11 @@ internal fun PestanaIncidencias(vm: AdminViewModel, ui: UiAdmin) {
                             style = MaterialTheme.typography.bodySmall, color = TextoSecundario
                         )
                     }
-                    items(sinJustificar, key = { it.clave }) { TarjetaIncidencia(it, mostrarNombre = true) }
+                    items(sinJustificar, key = { it.clave }) { i ->
+                        TarjetaIncidencia(i, mostrarNombre = true, accion = if (i.tipo == TipoIncidencia.SIN_SALIDA) {
+                            { BotonPillContorno("Marcar hora de salida", { salidaDe = i }, Modifier.fillMaxWidth(), color = Rojo) }
+                        } else null)
+                    }
                 }
             }
             Filtro.HISTORIAL -> {

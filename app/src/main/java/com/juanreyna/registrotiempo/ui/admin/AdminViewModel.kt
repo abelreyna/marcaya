@@ -183,6 +183,33 @@ class AdminViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Salida de un día anterior que el colaborador olvidó marcar (incidencia "No marcó salida").
+     * La hora debe ser posterior a su último marcaje de ese día.
+     */
+    fun marcarSalidaDia(i: Incidencia, hhmm: String) = viewModelScope.launch {
+        val u = ui.value.colaboradores.firstOrNull { it.uid == i.colaboradorId } ?: run { mensaje.value = "Colaborador no encontrado"; return@launch }
+        val salida = runCatching { Fechas.millisDe(i.fecha, hhmm) }.getOrNull() ?: return@launch
+        val ultimo = runCatching { repo.marcajesDelDia(adminId, u.uid, i.fecha) }.getOrDefault(emptyList())
+            .mapNotNull { it.timestampMillis }.maxOrNull() ?: 0L
+        when {
+            salida > System.currentTimeMillis() -> mensaje.value = "La hora de salida no puede ser posterior a la hora actual"
+            salida <= ultimo -> mensaje.value = "La salida debe ser después del último marcaje de ese día (${Fechas.hhmm(ultimo)})"
+            else -> ejecutar("Salida de ${u.nombre} del ${i.fecha} registrada a las $hhmm") {
+                repo.registrarSalidaPorAdmin(adminId, u, i.fecha, salida)
+                cargarIncidencias()
+            }
+        }
+    }
+
+    /** Activa o quita el domingo como día laborable para todo el equipo (conserva el resto de cada horario). */
+    fun habilitarDomingo(habilitar: Boolean) = ejecutar(if (habilitar) "Marcaje en domingo habilitado" else "Marcaje en domingo deshabilitado") {
+        ui.value.colaboradores.forEach { u ->
+            val dias = if (habilitar) (u.horario.diasLaborables + 7).distinct().sorted() else u.horario.diasLaborables - 7
+            if (dias.isNotEmpty() && dias != u.horario.diasLaborables) repo.actualizarDiasLaborables(u, dias)
+        }
+    }
+
     fun resolver(j: Justificacion, estado: EstadoJustificacion) =
         ejecutar("Justificación ${if (estado == EstadoJustificacion.APROBADA) "aprobada" else "no autorizada"}") {
             repo.resolverJustificacion(j.id, estado)
@@ -230,7 +257,10 @@ class AdminViewModel @Inject constructor(
 }
 
 /** Incidencias que generan notificación al empleador. */
-private val AVISAR = setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO, TipoIncidencia.SIN_SALIDA)
+private val AVISAR = setOf(
+    TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.SALIDA_TARDIA,
+    TipoIncidencia.EXCESO_DESCANSO, TipoIncidencia.DESCANSO_FUERA_HORARIO, TipoIncidencia.SIN_SALIDA
+)
 
 fun tituloAlerta(tipo: String): String = when (tipo) {
     "GPS_FALSO" -> "¡Ubicación simulada!"

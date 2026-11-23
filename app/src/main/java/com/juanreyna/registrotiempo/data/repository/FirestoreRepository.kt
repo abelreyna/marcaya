@@ -306,6 +306,16 @@ class FirestoreRepository @Inject constructor() {
     }
 
     /** Marcajes de un colaborador en un mes (para detectar incidencias). */
+    /** Marcajes de un colaborador en un día (consulta del administrador: filtra por su empresa). */
+    suspend fun marcajesDelDia(adminId: String, uid: String, fecha: String): List<Marcaje> =
+        marcajes.whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", uid).whereEqualTo("fecha", fecha)
+            .get().await().documents.map { it.aMarcaje() }
+
+    /** Cambia solo los días laborables del horario del colaborador. */
+    suspend fun actualizarDiasLaborables(u: Usuario, dias: List<Int>) {
+        usuarios.document(u.uid).update("horario", u.horario.copy(diasLaborables = dias).aMapa()).await()
+    }
+
     suspend fun marcajesColaboradorMes(uid: String, mes: String): List<Marcaje> =
         marcajes.whereEqualTo("colaboradorId", uid).whereEqualTo("mes", mes).get().await().documents.map { it.aMarcaje() }
 

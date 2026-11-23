@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.FreeBreakfast
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.MoreTime
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
@@ -50,6 +51,8 @@ fun iconoIncidencia(t: TipoIncidencia): ImageVector = when (t) {
     TipoIncidencia.TARDANZA -> Icons.Default.Schedule
     TipoIncidencia.SALIDA_ANTICIPADA -> Icons.Default.DirectionsRun
     TipoIncidencia.EXCESO_DESCANSO -> Icons.Default.FreeBreakfast
+    TipoIncidencia.DESCANSO_FUERA_HORARIO -> Icons.Default.FreeBreakfast
+    TipoIncidencia.SALIDA_TARDIA -> Icons.Default.MoreTime
     TipoIncidencia.SIN_SALIDA -> Icons.Default.Logout
     TipoIncidencia.FUERA_GEOCERCA -> Icons.Default.LocationOff
 }

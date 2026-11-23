@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.domain.calc
 
+import com.juanreyna.registrotiempo.domain.model.TipoMarcaje
 import com.juanreyna.registrotiempo.domain.model.EstadoIncidencia
 import com.juanreyna.registrotiempo.domain.model.EstadoJustificacion
 import com.juanreyna.registrotiempo.domain.model.Incidencia
@@ -50,14 +51,21 @@ object DetectorIncidencias {
                 continue
             }
             val d = ResumenMensual.diaDe(fecha, delDia, ahoraMillis, h)
-            if (d.minutosTarde > 0)
-                crudas += Triple(fecha, TipoIncidencia.TARDANZA, d.minutosTarde to "Ingresó a las ${Fechas.hhmmOpt(d.ingreso)} · ${d.minutosTarde} min tarde (entrada ${h.entrada})")
+            // Cada marcaje frente al horario (tolerancia incluida): ingreso, salida y regreso del descanso, y salida
+            val orden = delDia.filter { it.timestampMillis != null }.sortedBy { it.timestampMillis }
+            val ingreso = orden.firstOrNull { it.tipo == TipoMarcaje.INGRESO }
+            val inicioDesc = orden.firstOrNull { it.tipo == TipoMarcaje.INICIO_DESCANSO }
+            val finDesc = inicioDesc?.let { i -> orden.firstOrNull { it.tipo == TipoMarcaje.FIN_DESCANSO && it.timestampMillis!! > i.timestampMillis!! } }
+            // La salida registrada por el empleador no se considera incidencia del colaborador
+            val salida = orden.lastOrNull { it.tipo == TipoMarcaje.SALIDA }?.takeIf { !it.registradoPorAdmin }
+            listOfNotNull(
+                ingreso?.let { ReglasMarcaje.evaluar(h, it.tipo, it.timestampMillis!!) },
+                inicioDesc?.let { ReglasMarcaje.evaluar(h, it.tipo, it.timestampMillis!!) },
+                finDesc?.let { ReglasMarcaje.evaluar(h, it.tipo, it.timestampMillis!!, inicioDesc.timestampMillis) },
+                salida?.let { ReglasMarcaje.evaluar(h, it.tipo, it.timestampMillis!!) }
+            ).forEach { crudas += Triple(fecha, it.tipo, it.minutos to it.detalle) }
             if (d.fueraRango)
                 crudas += Triple(fecha, TipoIncidencia.FUERA_GEOCERCA, 0L to "Marcaje registrado fuera de la zona de trabajo")
-            if (d.minutosExcesoDescanso > 0)
-                crudas += Triple(fecha, TipoIncidencia.EXCESO_DESCANSO, d.minutosExcesoDescanso to "Descanso excedido en ${d.minutosExcesoDescanso} min (programado ${Fechas.duracion(h.minutosDescansoProgramado.toLong())})")
-            if (d.minutosSalidaAnticipada > 0)
-                crudas += Triple(fecha, TipoIncidencia.SALIDA_ANTICIPADA, d.minutosSalidaAnticipada to "Salió a las ${Fechas.hhmmOpt(d.salida)} · ${d.minutosSalidaAnticipada} min antes (salida ${h.salida})")
             val sinSalida = d.salida == null && d.ingreso != null &&
                 (!esHoy || (!cruza && minutoAhora > salidaProg + GRACIA_SIN_SALIDA))
             if (sinSalida)
