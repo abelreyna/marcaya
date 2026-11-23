@@ -305,17 +305,23 @@ La aplicación cuenta con una pantalla dedicada **"Acerca de"** accesible desde 
 
 ## 9. Catálogo Completo de Capturas de Pantalla (`docs/screenshots/`)
 
-Todas las pantallas siguen una identidad visual unificada basada en **Material Design 3** con paleta Azul Marino Corporativo (`#13294B`), Verde Esmeralda (`#0F8B6D`) y fondos claros de alto contraste:
+Capturas reales de la app (1080×2388 recortadas a 540 px de ancho), identidad visual **Material Design 3** con paleta Azul Marino Corporativo (`#13294B`) y Verde Esmeralda (`#0F8B6D`). Los datos personales (DNI) se reemplazan por valores de ejemplo antes de publicarlas:
 
-1. `01_flujo_principal_4_pantallas.png` — Acceso con Google, Selección de Rol, Panel del Administrador y Marcaje del Colaborador.
-2. `02_inicio_sesion_y_validacion_empleados.png` — Flujo de inicio de sesión persistente y validación en vivo de empleados.
-3. `03_vista_operativa_admin_y_marcaje.png` — Panel detallado del administrador (con resumen de costos) y pantalla de marcaje biométrico.
-4. `04_configuracion_modo_simple_vs_avanzado_peru.png` — Configuración de Modo Simple (MYPE) vs. Modo Avanzado (legislación laboral de Perú) y reporte de planilla.
-5. `05_historial_alertas_y_geocercas.png` — Historial de pagos del colaborador, centro de alertas/notificaciones y configuración de geocercas.
-6. `06_boleta_peru_historial_y_ajustes.png` — Persistencia de cuenta, historial de asistencias, boleta detallada Perú y ajustes generales con cierre de sesión.
-7. `07_incidencias_reportes_sunafil_y_gestion.png` — Justificación de incidencias, exportación de reportes SUNAFIL/PLAME y gestión de colaboradores.
-8. `08_mapa_completo_20_pantallas_y_acerca_de.png` — Mapa panorámico con las 20 vistas de la aplicación.
-9. `09_pantalla_acerca_de_autor_juan_abel_reyna_gonzales.png` — Pantalla dedicada **Acerca de** destacando la autoría de **Juan Abel Reyna Gonzales — Ingeniero Industrial** y el contacto directo (`abel.reynago@gmail.com`).
+0. `00_portada.png` — Portada del README (marcaje, panel, horario por día y reportes).
+1. `01_inicio_sesion_google.png` — Acceso con Google y sesión recordada.
+2. `02_registro_colaborador.png` — Registro con tipo de documento (DNI / C.E.).
+3. `03_marcaje_colaborador.png` — Marcaje del colaborador con selfie y ubicación verificada.
+4. `04_ganancia_del_dia.png` — Ganancia del día y acumulado del mes.
+5. `05_justificar_incidencias.png` — Incidencias y justificaciones del colaborador.
+6. `06_panel_administrador.png` — Panel del administrador en vivo.
+7. `07_centro_notificaciones.png` — Centro de notificaciones.
+8. `08_gestion_colaboradores.png` — Gestión de colaboradores y modo de cálculo.
+9. `09_ficha_colaborador_modo_simple.png` — Ficha del colaborador (Modo Simple).
+10. `10_horario_distinto_por_dia.png` — Horario distinto según el día.
+11. `11_geocerca_zona_trabajo.png` — Configuración de geocerca.
+12. `12_reportes_sunafil_plame.png` — Reportes SUNAFIL y PLAME.
+13. `13_reporte_costos.png` — Reporte de costos.
+14. `14_ajustes.png` — Ajustes y cierre de sesión.
 
 ## 10. Estructura de Carpetas y Despliegue en GitHub
 
@@ -329,7 +335,7 @@ registro-de-tiempo-de-personal/
 │       ├── ui/            # Pantallas Jetpack Compose (LoginGoogle, Admin, Colaborador, VipGate, AcercaDe)
 │       └── util/          # Validador Geocerca Haversine, Anti-FakeGPS, ML Kit Liveness e InAppUpdates
 ├── docs/
-│   └── screenshots/       # Capturas de pantalla oficiales (01 a 09)
+│   └── screenshots/       # Capturas reales de la app (00 a 14)
 ├── firestore.rules        # Reglas de seguridad desplegables en Firebase Console
 ├── CLAUDE.md              # Guía de arquitectura y contexto para desarrollo asistido por IA
 └── README.md              # Documentación principal del repositorio
