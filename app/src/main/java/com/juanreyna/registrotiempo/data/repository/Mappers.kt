@@ -125,7 +125,8 @@ fun DocumentSnapshot.aMarcaje() = Marcaje(
     longitud = d("longitud"),
     distanciaMetros = d("distanciaMetros"),
     dentroGeocerca = getBoolean("dentroGeocerca") ?: false,
-    validacionFacial = getBoolean("validacionFacial") ?: false
+    validacionFacial = getBoolean("validacionFacial") ?: false,
+    registradoPorAdmin = getBoolean("registradoPorAdmin") ?: false
 )
 
 fun DocumentSnapshot.aJustificacion() = Justificacion(

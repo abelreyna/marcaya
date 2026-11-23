@@ -24,10 +24,11 @@ enum class SistemaPension(val etiqueta: String) {
 enum class Moneda(val simbolo: String) { PEN("S/"), USD("$") }
 
 enum class TipoMarcaje(val etiqueta: String, val requiereRostro: Boolean) {
+    // Rostro solo al iniciar el turno de la mañana (Ingreso) y el de la tarde (Fin Descanso)
     INGRESO("Ingreso", true),
     INICIO_DESCANSO("Inicio Descanso", false),
-    FIN_DESCANSO("Fin Descanso", false),
-    SALIDA("Salida", true)
+    FIN_DESCANSO("Fin Descanso", true),
+    SALIDA("Salida", false)
 }
 
 enum class EstadoColaborador(val etiqueta: String) {
@@ -137,7 +138,9 @@ data class Marcaje(
     val longitud: Double = 0.0,
     val distanciaMetros: Double = 0.0,
     val dentroGeocerca: Boolean = false,
-    val validacionFacial: Boolean = false
+    val validacionFacial: Boolean = false,
+    /** Salida registrada manualmente por el empleador (olvido de marcaje). */
+    val registradoPorAdmin: Boolean = false
 )
 
 data class Alerta(

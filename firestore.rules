@@ -6,7 +6,8 @@ rules_version = '2';
 //  - impedir que un usuario cree su perfil como ADMINISTRADOR de otra empresa,
 //  - validar el Código de Administrador al vincular colaboradores,
 //  - aplicar el rate limiting de 60 s entre marcajes (campo usuarios.ultimoMarcaje),
-//  - permitir Inicio/Fin de Descanso sin rostro (solo Ingreso/Salida lo exigen),
+//  - exigir rostro solo al iniciar turno (Ingreso y Fin de Descanso); salidas sin rostro,
+//  - permitir al empleador registrar la salida de sus colaboradores (registradoPorAdmin),
 //  - cubrir las colecciones codigos, justificaciones y alertas.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -97,18 +98,32 @@ service cloud.firestore {
         isAdminOfCompany(resource.data.adminId)
       );
 
+      // Marcaje del propio colaborador: hora oficial del servidor.
+      // Rostro obligatorio solo al iniciar turno mañana (INGRESO) y tarde (FIN_DESCANSO).
       allow create: if isAuthenticated()
         && request.resource.data.colaboradorId == request.auth.uid
         && request.resource.data.adminId == getUserData().adminId
         && getUserData().activo != false
         && request.resource.data.timestamp == request.time
         && request.resource.data.tipo in ['INGRESO', 'INICIO_DESCANSO', 'FIN_DESCANSO', 'SALIDA']
+        && request.resource.data.get('registradoPorAdmin', false) == false
         && (request.resource.data.validacionFacial == true
-            || request.resource.data.tipo in ['INICIO_DESCANSO', 'FIN_DESCANSO'])
+            || request.resource.data.tipo in ['INICIO_DESCANSO', 'SALIDA'])
         // Rate limiting: el mismo lote debe actualizar ultimoMarcaje y han pasado ≥ 60 s del anterior
         && getAfter(userPath()).data.ultimoMarcaje == request.time
         && (!('ultimoMarcaje' in getUserData())
             || request.time > getUserData().ultimoMarcaje + duration.value(60, 's'));
+
+      // Salida registrada por el empleador para un colaborador de su empresa (hora no futura).
+      allow create: if isAdminOfCompany(request.resource.data.adminId)
+        && request.resource.data.tipo == 'SALIDA'
+        && request.resource.data.registradoPorAdmin == true
+        && request.resource.data.registradoPor == request.auth.uid
+        && request.resource.data.validacionFacial == false
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.timestamp <= request.time
+        && get(/databases/$(database)/documents/usuarios/$(request.resource.data.colaboradorId)).data.adminId
+           == request.resource.data.adminId;
 
       allow update: if isAdminOfCompany(resource.data.adminId);
       allow delete: if false;

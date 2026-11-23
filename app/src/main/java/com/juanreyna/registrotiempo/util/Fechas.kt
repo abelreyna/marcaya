@@ -14,6 +14,10 @@ object Fechas {
     private fun fmt(patron: String) = SimpleDateFormat(patron, localePe).apply { timeZone = zonaLima }
 
     fun hoy(): String = fmt("yyyy-MM-dd").format(Date())
+
+    /** "2026-11-22" + "17:30" → milisegundos en hora de Lima. */
+    fun millisDe(fecha: String, hhmm: String): Long = fmt("yyyy-MM-dd HH:mm").parse("$fecha $hhmm")!!.time
+    fun hhmm(millis: Long): String = fmt("HH:mm").format(Date(millis))
     fun mesActual(): String = fmt("yyyy-MM").format(Date())
     fun hora(millis: Long?): String = millis?.let { fmt("HH:mm:ss").format(Date(it)) } ?: "--:--"
     fun fechaLarga(millis: Long): String = fmt("EEEE d 'de' MMMM, yyyy").format(Date(millis))

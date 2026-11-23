@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.ui.text.style.TextOverflow
 import kotlin.math.roundToLong
 import com.juanreyna.registrotiempo.domain.calc.ResumenColaborador
@@ -229,7 +230,7 @@ fun AdminScreen(
             val empresa = ui.empresa
             if (empresa == null) { Cargando(); return@MarcoPantalla }
             when (pestana) {
-                0 -> PestanaPanel(ui)
+                0 -> PestanaPanel(vm, ui)
                 1 -> PestanaEquipo(vm, ui)
                 2 -> PestanaGeocerca(empresa.geocerca) { vm.guardarGeocerca(it) }
                 3 -> PestanaIncidencias(vm, ui)
@@ -268,7 +269,9 @@ private fun CentroNotificaciones(ui: UiAdmin, alCerrar: () -> Unit) {
 }
 
 @Composable
-private fun PestanaPanel(ui: UiAdmin) {
+private fun PestanaPanel(vm: AdminViewModel, ui: UiAdmin) {
+    var salidaDe by remember { mutableStateOf<FilaMonitoreo?>(null) }
+    salidaDe?.let { f -> DialogoSalida(f, alCerrar = { salidaDe = null }) { h -> vm.marcarSalida(f, h); salidaDe = null } }
     val e = ui.empresa!!
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -328,11 +331,40 @@ private fun PestanaPanel(ui: UiAdmin) {
                     }
                 }
                 FilaDato("Horas hoy · costo", "%.2f h · %s".format(f.horasHoy, dinero(mon, f.costoHoy)))
+                if (f.ultimo?.registradoPorAdmin == true)
+                    Text("Salida registrada por el empleador", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                if (f.estado != EstadoColaborador.SIN_MARCAR && f.estado != EstadoColaborador.JORNADA_CERRADA)
+                    BotonPillContorno("Marcar hora de salida", { salidaDe = f }, Modifier.fillMaxWidth(), color = Rojo, icono = Icons.Default.Logout)
             }
         }
         if (ui.filas.isEmpty()) item { TextoCentrado("Aún no hay colaboradores vinculados. Comparte tu código para empezar.") }
         item { Spacer(Modifier.height(8.dp)) }
     }
+}
+
+/** El empleador elige la hora de salida del colaborador (por defecto, la del horario o la hora actual). */
+@Composable
+private fun DialogoSalida(f: FilaMonitoreo, alCerrar: () -> Unit, alConfirmar: (String) -> Unit) {
+    val ahora = Fechas.hhmm(System.currentTimeMillis())
+    val programada = f.usuario.horario.salida
+    var hora by remember { mutableStateOf(if (Horario.minutos(programada) <= Horario.minutos(ahora)) programada else ahora) }
+    AlertDialog(
+        onDismissRequest = alCerrar,
+        title = { Text("Hora de salida") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("${f.usuario.nombre} · ingreso/último marcaje: ${Fechas.horaCorta(f.ultimo?.timestampMillis)}", style = MaterialTheme.typography.bodyMedium)
+                CampoHora("Salida", hora, Modifier.fillMaxWidth()) { hora = it }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BotonPillContorno("Horario $programada", { hora = programada }, Modifier.weight(1f), color = Teal)
+                    BotonPillContorno("Ahora $ahora", { hora = ahora }, Modifier.weight(1f), color = Teal)
+                }
+                Text("Se registrará como salida marcada por el empleador y cerrará la jornada de hoy.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            }
+        },
+        confirmButton = { TextButton({ alConfirmar(hora) }) { Text("Registrar salida") } },
+        dismissButton = { TextButton(alCerrar) { Text("Cancelar") } }
+    )
 }
 
 @Composable

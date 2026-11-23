@@ -234,7 +234,7 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
                 ) { Icon(Icons.Default.Face, null, tint = Color(0xFF8FD3D0), modifier = Modifier.size(64.dp)) }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Se activa al marcar Ingreso y Salida · la imagen no se guarda",
+                    "Se activa al iniciar el turno de la mañana (Ingreso) y de la tarde (Fin Descanso) · la imagen no se guarda",
                     color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center
                 )
             }
@@ -296,7 +296,7 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
             Seccion(borde = Borde) {
                 ui.marcajesHoy.forEach { m ->
                     FilaDato(
-                        m.tipo.etiqueta + if (m.validacionFacial && m.tipo.requiereRostro) " · rostro ✓" else "",
+                        m.tipo.etiqueta + (if (m.validacionFacial && m.tipo.requiereRostro) " · rostro ✓" else "") + (if (m.registradoPorAdmin) " · registrada por el empleador" else ""),
                         "${Fechas.horaCorta(m.timestampMillis)} · ${m.distanciaMetros.toInt()} m",
                         colorValor = if (m.dentroGeocerca) Color.Unspecified else Rojo
                     )

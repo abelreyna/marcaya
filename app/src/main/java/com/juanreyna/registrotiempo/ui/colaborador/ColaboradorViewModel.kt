@@ -98,7 +98,7 @@ class ColaboradorViewModel @Inject constructor(
                 }
                 ResultadoUbicacion.SinSenal -> mensaje.value = "No se pudo obtener tu ubicación. Activa el GPS e inténtalo de nuevo."
                 is ResultadoUbicacion.Valida -> {
-                    repo.registrarMarcaje(u, tipo, r.latitud, r.longitud, r.distanciaMetros, r.dentro, validacionFacial || !tipo.requiereRostro)
+                    repo.registrarMarcaje(u, tipo, r.latitud, r.longitud, r.distanciaMetros, r.dentro, validacionFacial && tipo.requiereRostro)
                     if (!r.dentro) runCatching {
                         repo.registrarAlerta(u, "FUERA_RANGO", "${tipo.etiqueta} a ${r.distanciaMetros.toInt()} m del centro de ${e.geocerca.nombre}")
                     }

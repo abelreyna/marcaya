@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.data.repository
 
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.juanreyna.registrotiempo.domain.model.Alerta
@@ -188,6 +189,31 @@ class FirestoreRepository @Inject constructor() {
         )
         batch.update(usuarios.document(usuario.uid), "ultimoMarcaje", FieldValue.serverTimestamp())
         batch.commit().await()
+    }
+
+    /**
+     * El empleador registra la salida de un colaborador que olvidó marcarla, con la hora que elija.
+     * Las reglas solo permiten tipo SALIDA, marcado como registradoPorAdmin y con hora no futura.
+     */
+    suspend fun registrarSalidaPorAdmin(adminUid: String, colaborador: Usuario, fecha: String, salidaMillis: Long) {
+        marcajes.document().set(
+            mapOf(
+                "colaboradorId" to colaborador.uid,
+                "colaboradorNombre" to colaborador.nombre,
+                "adminId" to colaborador.adminId,
+                "tipo" to TipoMarcaje.SALIDA.name,
+                "timestamp" to Timestamp(java.util.Date(salidaMillis)),
+                "fecha" to fecha,
+                "mes" to fecha.take(7),
+                "latitud" to 0.0,
+                "longitud" to 0.0,
+                "distanciaMetros" to 0.0,
+                "dentroGeocerca" to true,
+                "validacionFacial" to false,
+                "registradoPorAdmin" to true,
+                "registradoPor" to adminUid
+            )
+        ).await()
     }
 
     fun observarMarcajesColaborador(uid: String, campo: String, valor: String): Flow<List<Marcaje>> = callbackFlow {

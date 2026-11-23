@@ -111,6 +111,19 @@ class AdminViewModel @Inject constructor(
         }
     }
 
+    /** Registra la salida de un colaborador con la hora elegida por el empleador (jornada de hoy). */
+    fun marcarSalida(f: FilaMonitoreo, hhmm: String) {
+        val salida = runCatching { Fechas.millisDe(Fechas.hoy(), hhmm) }.getOrNull() ?: return
+        val ultimo = f.ultimo?.timestampMillis ?: 0L
+        when {
+            salida > System.currentTimeMillis() -> mensaje.value = "La hora de salida no puede ser posterior a la hora actual"
+            salida <= ultimo -> mensaje.value = "La salida debe ser después del último marcaje (${Fechas.hhmm(ultimo)})"
+            else -> ejecutar("Salida de ${f.usuario.nombre} registrada a las $hhmm") {
+                repo.registrarSalidaPorAdmin(adminId, f.usuario, Fechas.hoy(), salida)
+            }
+        }
+    }
+
     fun resolver(j: Justificacion, estado: EstadoJustificacion) =
         ejecutar("Justificación ${if (estado == EstadoJustificacion.APROBADA) "aprobada" else "rechazada"}") {
             repo.resolverJustificacion(j.id, estado)
