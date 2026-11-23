@@ -103,8 +103,16 @@ data class ConfigPago(
     /** Datos de la boleta (Modo Avanzado): cargo, código CUSPP de la AFP y fecha de ingreso "yyyy-MM-dd". */
     val cargo: String = "",
     val cuspp: String = "",
-    val fechaIngreso: String = ""
-)
+    val fechaIngreso: String = "",
+    /**
+     * Modo Avanzado: true = remuneración por hora (se paga cada hora trabajada × [tarifaPorHora], con beneficios de ley);
+     * false = sueldo mensual fijo ([sueldoBase] por 30 días).
+     */
+    val pagoPorHora: Boolean = false
+) {
+    /** Valor de una hora ordinaria: tarifa (Simple o Avanzado por hora) o sueldo mensual ÷ 240 h. */
+    val valorHora: Double get() = if (modo == ModoPago.SIMPLE || pagoPorHora) tarifaPorHora else sueldoBase / 240.0
+}
 
 /** Horas de un día concreto de la semana. Sin descanso: inicio y fin de descanso iguales. */
 data class Turno(val entrada: String, val inicioDescanso: String, val finDescanso: String, val salida: String) {

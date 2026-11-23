@@ -117,12 +117,15 @@ object PlanillaPeruCalculator {
     /**
      * Costo de un día para el panel en vivo.
      * - Simple: horas × tarifa.
-     * - Avanzado: 1/30 del costo laboral mensual (sueldo, asignación, EsSalud y provisiones) + horas extras con su EsSalud.
+     * - Avanzado mensual: 1/30 del costo laboral mensual (sueldo, asignación, EsSalud y provisiones) + horas extras con su EsSalud.
+     * - Avanzado por hora: horas del día × tarifa + extras con recargo, más EsSalud y provisiones sobre ese monto.
      *   Un día sin horas no suma costo.
      */
     fun costoDiario(config: ConfigPago, dia: HorasDia, p: ParametrosLegales = ParametrosLegales()): Double {
         if (dia.ordinarias + dia.extra <= 0.0) return 0.0
         if (config.modo == ModoPago.SIMPLE) return ((dia.ordinarias + dia.extra) * config.tarifaPorHora).r2()
+        if (config.pagoPorHora)
+            return modoAvanzado(config.copy(asignacionFamiliar = false), listOf(dia), p, PeriodoPlanilla(), minimoEssalud = false).costoEmpleador
         val mes = modoAvanzado(config, emptyList(), p, PeriodoPlanilla())
         val (h1, h2) = tramosExtra(listOf(dia))
         val vh = valorHoraExtra(config, p)
@@ -138,9 +141,13 @@ object PlanillaPeruCalculator {
     private fun asignacionFamiliar(config: ConfigPago, p: ParametrosLegales) =
         if (config.asignacionFamiliar) (p.rmv * 0.10).r2() else 0.0
 
-    /** Valor hora para el sobretiempo: remuneración ordinaria (sueldo + asignación familiar) ÷ 30 ÷ 8 (DS 007-2002-TR, art. 10). */
+    /**
+     * Valor hora para el sobretiempo (DS 007-2002-TR, art. 10): remuneración ordinaria ÷ 30 ÷ 8.
+     * Sueldo mensual: (sueldo + asignación familiar) ÷ 240. Por hora: tarifa + asignación familiar ÷ 240.
+     */
     private fun valorHoraExtra(config: ConfigPago, p: ParametrosLegales) =
-        (config.sueldoBase + asignacionFamiliar(config, p)) / p.horasMensualesBase
+        (if (config.pagoPorHora) config.tarifaPorHora else config.sueldoBase / p.horasMensualesBase) +
+            asignacionFamiliar(config, p) / p.horasMensualesBase
 
     /**
      * Modo Simple: horas × tarifa, sin descuentos. Las horas extras se pagan a la misma tarifa, sin recargo
@@ -168,31 +175,52 @@ object PlanillaPeruCalculator {
     }
 
     /**
-     * Modo Avanzado Perú. El sueldo es mensual (cubre los 30 días, incluido el descanso semanal):
-     * se paga completo salvo faltas injustificadas (1/30 cada una), tardanzas no justificadas o ingreso a mitad de mes.
+     * Modo Avanzado Perú.
+     * - Sueldo mensual: cubre los 30 días (incluido el descanso semanal); se paga completo salvo faltas injustificadas
+     *   (1/30 cada una), tardanzas no justificadas o ingreso a mitad de mes.
+     * - Remuneración por hora: se paga cada hora ordinaria trabajada × tarifa (las horas no trabajadas no se pagan, así que
+     *   no hay descuento por faltas ni tardanzas). Gratificación, CTS y vacaciones se provisionan sobre lo ganado en el mes;
+     *   con menos de 4 horas diarias en promedio (tiempo parcial) no corresponden CTS ni vacaciones.
+     * @param minimoEssalud aplica la base mínima de EsSalud (RMV); se omite al costear un solo día.
      */
-    private fun modoAvanzado(config: ConfigPago, dias: List<HorasDia>, p: ParametrosLegales, periodo: PeriodoPlanilla): Boleta {
+    private fun modoAvanzado(
+        config: ConfigPago,
+        dias: List<HorasDia>,
+        p: ParametrosLegales,
+        periodo: PeriodoPlanilla,
+        minimoEssalud: Boolean = true
+    ): Boleta {
+        val porHora = config.pagoPorHora
         val sueldo = config.sueldoBase
+        val tarifa = config.tarifaPorHora
         val af = asignacionFamiliar(config, p)
         val diasComputables = periodo.diasComputables.coerceIn(0, p.diasMes)
-        val faltas = periodo.faltas.coerceIn(0, diasComputables)
-        val diasPagados = diasComputables - faltas
+        val diasConHoras = dias.count { it.ordinarias + it.extra > 0 }
+        val faltas = if (porHora) 0 else periodo.faltas.coerceIn(0, diasComputables)
+        val diasPagados = if (porHora) diasConHoras else diasComputables - faltas
         val esMicro = config.regimen == RegimenLaboral.MICROEMPRESA
+        val ordinarias = dias.sumOf { it.ordinarias }
+        val promedioDiario = if (diasConHoras > 0) dias.sumOf { it.ordinarias + it.extra } / diasConHoras else 0.0
+        val tiempoParcial = porHora && diasConHoras > 0 && promedioDiario < 4.0
 
         // --- Ingresos ---
-        val remBasica = (sueldo / p.diasMes * diasPagados).r2()
+        val remBasica = if (porHora) (ordinarias * tarifa).r2() else (sueldo / p.diasMes * diasPagados).r2()
         val vhExtra = valorHoraExtra(config, p)
         val (he25, he35) = tramosExtra(dias)
         val montoHe25 = (he25 * vhExtra * 1.25).r2()
         val montoHe35 = (he35 * vhExtra * 1.35).r2()
-        val descTardanza = (periodo.minutosTardanza / 60.0 * sueldo / p.horasMensualesBase).r2()
+        val descTardanza = if (porHora) 0.0 else (periodo.minutosTardanza / 60.0 * sueldo / p.horasMensualesBase).r2()
         val ingresos = buildList {
-            val detalle = buildString {
-                append("$diasPagados de ${p.diasMes} días")
-                if (faltas > 0) append(" · $faltas ${if (faltas == 1) "falta" else "faltas"}")
-                if (diasComputables < p.diasMes) append(" · ingreso en el mes")
+            if (porHora) {
+                add(LineaBoleta("Remuneración por horas (${"%.2f".format(ordinarias)} h × ${"%.2f".format(tarifa)})", remBasica))
+            } else {
+                val detalle = buildString {
+                    append("$diasPagados de ${p.diasMes} días")
+                    if (faltas > 0) append(" · $faltas ${if (faltas == 1) "falta" else "faltas"}")
+                    if (diasComputables < p.diasMes) append(" · ingreso en el mes")
+                }
+                add(LineaBoleta("Remuneración básica ($detalle)", remBasica))
             }
-            add(LineaBoleta("Remuneración básica ($detalle)", remBasica))
             if (af > 0) add(LineaBoleta("Asignación familiar (10 % RMV)", af))
             if (montoHe25 > 0) add(LineaBoleta("Horas extras 25 % (${"%.2f".format(he25)} h)", montoHe25))
             if (montoHe35 > 0) add(LineaBoleta("Horas extras 35 % (${"%.2f".format(he35)} h)", montoHe35))
@@ -217,22 +245,24 @@ object PlanillaPeruCalculator {
             }
         }
 
-        // --- Beneficios sociales según régimen ---
-        val remComputable = sueldo + af
+        // --- Beneficios sociales según régimen (por hora: sobre lo ganado en el mes) ---
+        val remComputable = if (porHora) remBasica + af else sueldo + af
         val factorGratiCts = when (config.regimen) {
             RegimenLaboral.GENERAL -> 1.0
             RegimenLaboral.PEQUENA_EMPRESA -> 0.5 // media gratificación y 15 remuneraciones diarias de CTS por año
             RegimenLaboral.MICROEMPRESA -> 0.0
         }
         val mesCompleto = diasComputables == p.diasMes
-        val fraccionDias = diasPagados.toDouble() / p.diasMes
+        // Por hora, la remuneración computable ya es lo ganado: no se vuelve a prorratear por días
+        val fraccionDias = if (porHora) 1.0 else diasPagados.toDouble() / p.diasMes
         // Gratificación (Ley 27735): un sueldo en julio y otro en diciembre → 1/6 por mes calendario completo
-        val gratiMensual = if (mesCompleto) (remComputable * factorGratiCts / 6.0).r2() else 0.0
+        val gratiMensual = if (mesCompleto || porHora) (remComputable * factorGratiCts / 6.0).r2() else 0.0
         val bonifExtra = (gratiMensual * p.bonificacionExtraordinaria).r2()
-        // CTS (DS 001-97-TR): (remuneración + 1/6 de la gratificación) ÷ 12 por mes; las faltas descuentan 1/30
-        val ctsMensual = (factorGratiCts * (remComputable + remComputable * factorGratiCts / 6.0) / 12.0 * fraccionDias).r2()
+        // CTS (DS 001-97-TR): (remuneración + 1/6 de la gratificación) ÷ 12 por mes; las faltas descuentan 1/30.
+        // Tiempo parcial (menos de 4 h diarias): sin CTS ni vacaciones (DS 001-97-TR art. 4; DL 713 art. 12)
+        val ctsMensual = if (tiempoParcial) 0.0 else (factorGratiCts * (remComputable + remComputable * factorGratiCts / 6.0) / 12.0 * fraccionDias).r2()
         // Vacaciones: 30 días al año en el Régimen General, 15 en el REMYPE
-        val vacacionesMensual = (remComputable / (if (config.regimen == RegimenLaboral.GENERAL) 12.0 else 24.0) * fraccionDias).r2()
+        val vacacionesMensual = if (tiempoParcial) 0.0 else (remComputable / (if (config.regimen == RegimenLaboral.GENERAL) 12.0 else 24.0) * fraccionDias).r2()
 
         // --- Renta de 5.ª categoría: proyección anual (remuneración fija × 12 + gratificaciones + bonificación + extras del mes) ---
         val extrasMes = montoHe25 + montoHe35
@@ -245,8 +275,9 @@ object PlanillaPeruCalculator {
         val aportes = if (esMicro) {
             listOf(LineaBoleta("SIS Microempresas (aporte según afiliación; no calculado)", 0.0))
         } else {
-            // Base mínima de EsSalud: la RMV (proporcional si ingresó a mitad de mes)
-            val baseEssalud = maxOf(bruto, p.rmv * diasComputables / p.diasMes)
+            // Base mínima de EsSalud: la RMV (proporcional si ingresó a mitad de mes); por hora, solo si hubo horas en el mes
+            val minimo = if (!minimoEssalud || (porHora && bruto <= 0.0)) 0.0 else p.rmv * diasComputables / p.diasMes
+            val baseEssalud = maxOf(bruto, minimo)
             listOf(LineaBoleta("EsSalud (9 %)", (baseEssalud * p.tasaEssalud).r2()))
         }
 
@@ -260,7 +291,13 @@ object PlanillaPeruCalculator {
         }
 
         val advertencias = buildList {
-            if (sueldo <= 0) add("Falta registrar el sueldo base del colaborador.")
+            val rmvHora = p.rmv / p.horasMensualesBase
+            if (porHora) {
+                if (tarifa <= 0) add("Falta registrar la tarifa por hora del colaborador.")
+                else if (tarifa < rmvHora - 0.005) add("La tarifa por hora (S/ ${"%.2f".format(tarifa)}) es menor que la RMV por hora (S/ ${"%.2f".format(rmvHora)} = RMV ÷ 240).")
+                if (tiempoParcial) add("Promedio de ${"%.1f".format(promedioDiario)} h por día: tiempo parcial (menos de 4 h diarias), sin CTS ni vacaciones. El contrato a tiempo parcial debe registrarse ante la AAT.")
+                if (diasConHoras > 0 && !esMicro) add("EsSalud se calcula sobre una base mínima de una RMV aunque las horas del mes sumen menos.")
+            } else if (sueldo <= 0) add("Falta registrar el sueldo base del colaborador.")
             else if (sueldo < p.rmv) add("El sueldo base (S/ ${"%,.2f".format(sueldo)}) es menor que la RMV vigente (S/ ${"%,.2f".format(p.rmv)}). Solo es válido si la jornada es menor a 4 horas diarias.")
             if (config.asignacionFamiliar && config.regimen != RegimenLaboral.GENERAL)
                 add("En el REMYPE la asignación familiar no es obligatoria; se está pagando por acuerdo.")
@@ -268,7 +305,6 @@ object PlanillaPeruCalculator {
             if (quintaMensual > 0) add("La retención de 5.ª categoría es una proyección (÷ 12). En la planilla real se aplica el procedimiento del art. 40 del Reglamento de la LIR.")
         }
 
-        val ordinarias = dias.sumOf { it.ordinarias }
         return Boleta(
             ModoPago.AVANZADO, ordinarias, he25, he35, ingresos, descuentos, aportes, provisiones,
             diasLaborados = diasPagados, faltas = faltas, advertencias = advertencias

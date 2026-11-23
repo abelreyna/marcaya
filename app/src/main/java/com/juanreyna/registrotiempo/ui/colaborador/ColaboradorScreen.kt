@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
 import com.juanreyna.registrotiempo.ui.admin.diasTexto
 import com.juanreyna.registrotiempo.ui.components.TarjetaAviso
 import androidx.compose.material.icons.filled.EventBusy
@@ -231,7 +232,7 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
     // Día no laborable (p. ej. domingo sin habilitar): no se puede iniciar jornada; una jornada abierta sí puede cerrarse
     val diaLaborable = ui.usuario.horario.trabajaEl(Fechas.diaSemanaIso(Fechas.hoy()))
     val activo = { t: TipoMarcaje -> !procesando && !bloqueado && t in permitidos && (t != TipoMarcaje.INGRESO || diaLaborable) }
-    val valorHora = if (cfg.modo == ModoPago.SIMPLE) cfg.tarifaPorHora else cfg.sueldoBase / 240.0
+    val valorHora = cfg.valorHora
     val pagoHoy = resumenHoy.horasEfectivas * valorHora
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -291,14 +292,21 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
             }
         }
 
-        if (cfg.modo == ModoPago.SIMPLE) {
+        run {
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Teal).padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("Total acumulado hoy:", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(dinero(mon, pagoHoy), color = Color.White, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                Text("(sin descuentos, ${dinero(mon, cfg.tarifaPorHora)} por hora)", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    when {
+                        cfg.modo == ModoPago.SIMPLE -> "(sin descuentos, ${dinero(mon, valorHora)} por hora)"
+                        cfg.pagoPorHora -> "(bruto, ${dinero(mon, valorHora)} por hora)"
+                        else -> "(bruto, ${dinero(mon, valorHora)} por hora = sueldo ÷ 240)"
+                    },
+                    color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall
+                )
             }
         }
         TarjetaDosMetricas(
@@ -307,8 +315,19 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
         )
         ui.resumenMes?.let { r ->
             Seccion(borde = Borde) {
-                FilaDato("Acumulado del mes (${"%.1f".format(r.horasTotales)} h)", dinero(mon, r.boleta.netoAPagar), destacado = true, colorValor = Teal)
-                if (cfg.modo == ModoPago.AVANZADO) Text("Neto proyectado con descuentos de ley (ver Historial → Boleta).", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                if (cfg.modo == ModoPago.AVANZADO) {
+                    FilaDato("Horas del mes", "%.1f h".format(r.horasTotales))
+                    FilaDato("Ganado por horas (bruto)", dinero(mon, ReporteCostos.construir(listOf(r)).first().pagadoPorDias))
+                }
+                FilaDato(
+                    if (cfg.modo == ModoPago.SIMPLE) "Acumulado del mes (${"%.1f".format(r.horasTotales)} h)" else "Neto proyectado del mes",
+                    dinero(mon, r.boleta.netoAPagar), destacado = true, colorValor = Teal
+                )
+                if (cfg.modo == ModoPago.AVANZADO) Text(
+                    if (cfg.pagoPorHora) "Horas trabajadas × tarifa + extras, con descuentos de ley (ver Historial → Boleta)."
+                    else "Sueldo mensual completo menos faltas y tardanzas, con descuentos de ley (ver Historial → Boleta).",
+                    style = MaterialTheme.typography.bodySmall, color = TextoSecundario
+                )
             }
         }
         if (ui.marcajesHoy.isNotEmpty()) {
@@ -361,7 +380,7 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
         item { TituloSeccion("Días trabajados") }
         items(r.dias.reversed()) { d ->
             val (ds, dn, mm) = Fechas.partesFecha(d.fecha)
-            val valorHora = if (r.boleta.modo == ModoPago.SIMPLE) r.usuario.configPago.tarifaPorHora else r.usuario.configPago.sueldoBase / 240.0
+            val valorHora = r.usuario.configPago.valorHora
             Seccion(borde = Borde) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     InsigniaFecha(ds, dn, mm)

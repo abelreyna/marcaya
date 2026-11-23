@@ -445,7 +445,8 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
                     val c = u.configPago
                     Text(
                         if (c.modo == ModoPago.SIMPLE) "Modo Simple · ${dinero(e.moneda.simbolo, c.tarifaPorHora)}/h"
-                        else "${c.regimen.etiqueta} · ${c.sistemaPension.etiqueta}",
+                        else if (c.pagoPorHora) "Avanzado · ${dinero(e.moneda.simbolo, c.tarifaPorHora)}/h · ${c.regimen.etiqueta}"
+                        else "Avanzado · ${dinero(e.moneda.simbolo, c.sueldoBase)}/mes (${dinero(e.moneda.simbolo, c.valorHora)}/h) · ${c.regimen.etiqueta}",
                         style = MaterialTheme.typography.bodySmall, color = TextoSecundario
                     )
                 }
@@ -543,16 +544,37 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                     Text("Horas extras: se pagan a la misma tarifa por hora, sin recargo.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
                 } else {
-                    val sueldoNum = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0
-                    OutlinedTextField(sueldo, { sueldo = it }, label = { Text("Sueldo base mensual ($mon)") }, shape = FormaCampo,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        isError = sueldoNum in 0.01..(rmv - 0.01),
-                        supportingText = {
-                            Text(
-                                if (sueldoNum in 0.01..(rmv - 0.01)) "Menor que la RMV (S/ ${"%,.2f".format(rmv)}): solo válido con jornada menor a 4 h"
-                                else "RMV vigente: S/ ${"%,.2f".format(rmv)}"
-                            )
-                        })
+                    Text("Tipo de remuneración", fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ChipFiltro("Sueldo mensual", !cfg.pagoPorHora) { cfg = cfg.copy(pagoPorHora = false) }
+                        ChipFiltro("Por hora", cfg.pagoPorHora) { cfg = cfg.copy(pagoPorHora = true) }
+                    }
+                    if (cfg.pagoPorHora) {
+                        val rmvHora = rmv / 240.0
+                        val tarifaNum = tarifa.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        OutlinedTextField(tarifa, { tarifa = it }, label = { Text("Remuneración por hora ($mon)") }, shape = FormaCampo,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            isError = tarifaNum in 0.01..(rmvHora - 0.01),
+                            supportingText = {
+                                Text(
+                                    if (tarifaNum in 0.01..(rmvHora - 0.01)) "Menor que la RMV por hora (S/ ${"%.2f".format(rmvHora)})"
+                                    else "Se paga cada hora trabajada. Mínimo: S/ ${"%.2f".format(rmvHora)} por hora (RMV ÷ 240)"
+                                )
+                            })
+                    } else {
+                        val sueldoNum = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0
+                        OutlinedTextField(sueldo, { sueldo = it }, label = { Text("Sueldo base mensual ($mon)") }, shape = FormaCampo,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            isError = sueldoNum in 0.01..(rmv - 0.01),
+                            supportingText = {
+                                Text(
+                                    if (sueldoNum in 0.01..(rmv - 0.01)) "Menor que la RMV (S/ ${"%,.2f".format(rmv)}): solo válido con jornada menor a 4 h"
+                                    else "Valor hora: ${dinero(mon, sueldoNum / 240.0)} (sueldo ÷ 240 h) · RMV vigente: S/ ${"%,.2f".format(rmv)}"
+                                )
+                            })
+                        Text("El sueldo mensual se paga completo (30 días); solo se descuentan faltas y tardanzas no justificadas.",
+                            style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                    }
                     OutlinedTextField(cfg.cargo, { cfg = cfg.copy(cargo = it.take(60)) }, label = { Text("Cargo o puesto") },
                         shape = FormaCampo, singleLine = true)
                     CampoFecha("Fecha de ingreso", cfg.fechaIngreso.ifBlank { u.creadoMillis?.let { Fechas.fechaDe(it) } ?: Fechas.hoy() }) {

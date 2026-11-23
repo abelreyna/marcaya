@@ -101,6 +101,10 @@ object ReportExporter {
         if (b.modo == ModoPago.AVANZADO) {
             l.linea("Cargo: ${cfg.cargo.ifBlank { "—" }}   Fecha de ingreso: ${ResumenMensual.fechaIngreso(u)?.split("-")?.reversed()?.joinToString("/") ?: "—"}")
             l.linea("Régimen laboral: ${cfg.regimen.etiqueta}   Régimen pensionario: ${cfg.sistemaPension.etiqueta}${if (cfg.sistemaPension != SistemaPension.ONP) "   CUSPP: ${cfg.cuspp.ifBlank { "—" }}" else ""}")
+            l.linea(
+                if (cfg.pagoPorHora) "Remuneración: por hora (${m(mon, cfg.tarifaPorHora)} la hora)"
+                else "Remuneración: sueldo mensual ${m(mon, cfg.sueldoBase)} (valor hora ${m(mon, cfg.valorHora)})"
+            )
             l.linea("Días laborados: ${b.diasLaborados ?: "—"}   Faltas: ${b.faltas}   Horas ordinarias: ${"%.2f".format(b.horasOrdinarias)}   Horas extras: ${"%.2f".format(b.horasExtra25 + b.horasExtra35)}")
         } else {
             l.linea("Modalidad: Modo Simple (pago por hora)")

@@ -70,6 +70,46 @@ class DomainTest {
     private fun monto(b: com.juanreyna.registrotiempo.domain.calc.Boleta, prefijo: String) =
         (b.ingresos + b.descuentos + b.aportesEmpleador + b.provisiones).first { it.concepto.startsWith(prefijo) }.monto
 
+    // ---------- Modo Avanzado: remuneración por hora ----------
+    @Test fun avanzadoPorHora_pagaCadaHoraConBeneficios() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, pagoPorHora = true, tarifaPorHora = 10.0, sistemaPension = SistemaPension.ONP)
+        // 22 días de 8 h + 1 día de 10 h (2 h extra al 25 %)
+        val b = PlanillaPeruCalculator.calcular(cfg, List(22) { 8.0 } + 10.0, nov26)
+        assertEquals(1840.0, monto(b, "Remuneración por horas"), 0.001)
+        assertEquals(25.0, monto(b, "Horas extras 25"), 0.001)
+        assertEquals(1865.0, b.totalIngresos, 0.001)
+        assertEquals(242.45, monto(b, "ONP"), 0.001)
+        assertEquals(167.85, monto(b, "EsSalud"), 0.001)
+        assertEquals(306.67, monto(b, "Provisión gratificación"), 0.001)
+        assertEquals(27.60, monto(b, "Provisión bonificación"), 0.001)
+        assertEquals(178.89, monto(b, "Provisión CTS"), 0.001)
+        assertEquals(153.33, monto(b, "Provisión vacaciones"), 0.001)
+        assertEquals(23, b.diasLaborados)
+        assertEquals(10.0, cfg.valorHora, 0.0)
+        assertEquals(10.0, ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 2400.0).valorHora, 0.0)
+    }
+
+    @Test fun avanzadoPorHora_tiempoParcialYSinDescuentoPorFaltas() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, pagoPorHora = true, tarifaPorHora = 6.0, sistemaPension = SistemaPension.ONP)
+        val b = PlanillaPeruCalculator.calcular(cfg, List(10) { 3.0 }, nov26, PeriodoPlanilla(faltas = 3, minutosTardanza = 40))
+        assertEquals(180.0, b.totalIngresos, 0.001)                 // sin línea de tardanzas ni descuento por faltas
+        assertEquals(0, b.faltas)
+        assertEquals(110.70, monto(b, "EsSalud"), 0.001)             // base mínima: una RMV
+        assertEquals(30.0, monto(b, "Provisión gratificación"), 0.001)
+        assertTrue(b.provisiones.none { it.concepto.startsWith("Provisión CTS") || it.concepto.startsWith("Provisión vacaciones") })
+        assertTrue(b.advertencias.any { "tiempo parcial" in it })
+        val bajo = PlanillaPeruCalculator.calcular(cfg.copy(tarifaPorHora = 5.0), listOf(8.0), nov26)
+        assertTrue(bajo.advertencias.any { "RMV por hora" in it })
+        // Un mes sin horas no genera pago ni EsSalud
+        assertEquals(0.0, PlanillaPeruCalculator.calcular(cfg, emptyList(), nov26).costoEmpleador, 0.001)
+    }
+
+    @Test fun avanzadoPorHora_costoDiario() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, pagoPorHora = true, tarifaPorHora = 10.0)
+        // 80 + EsSalud 7.20 + grati 13.33 + bonif 1.20 + CTS 7.78 + vacaciones 6.67
+        assertEquals(116.18, PlanillaPeruCalculator.costoDiario(cfg, HorasDia(8.0, 0.0), nov26), 0.001)
+    }
+
     @Test fun parametros_vigentesPorMes() {
         assertEquals(1230.0, nov26.rmv, 0.0)
         assertEquals(5500.0, nov26.uit, 0.0)

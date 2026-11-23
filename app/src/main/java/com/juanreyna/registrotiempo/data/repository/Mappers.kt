@@ -40,7 +40,8 @@ fun ConfigPago.aMapa(): Map<String, Any> = mapOf(
     "recargoExtra2" to recargoExtra2,
     "cargo" to cargo,
     "cuspp" to cuspp,
-    "fechaIngreso" to fechaIngreso
+    "fechaIngreso" to fechaIngreso,
+    "pagoPorHora" to pagoPorHora
 )
 
 fun Horario.aMapa(): Map<String, Any> = mapOf(
@@ -90,7 +91,8 @@ private fun configDe(mapa: Any?): ConfigPago {
         recargoExtra2 = (m["recargoExtra2"] as? Number)?.toDouble() ?: 35.0,
         cargo = m["cargo"] as? String ?: "",
         cuspp = m["cuspp"] as? String ?: "",
-        fechaIngreso = m["fechaIngreso"] as? String ?: ""
+        fechaIngreso = m["fechaIngreso"] as? String ?: "",
+        pagoPorHora = m["pagoPorHora"] as? Boolean ?: false
     )
 }
 
