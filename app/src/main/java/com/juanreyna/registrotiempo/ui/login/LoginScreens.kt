@@ -1,5 +1,9 @@
 package com.juanreyna.registrotiempo.ui.login
 
+import com.juanreyna.registrotiempo.domain.model.Celular
+import com.juanreyna.registrotiempo.domain.model.TipoDocumento
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilterChip
 import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -151,6 +155,31 @@ private fun Campo(valor: String, alCambiar: (String) -> Unit, etiqueta: String, 
     )
 }
 
+/** Campo solo numérico con cantidad exacta de dígitos y contador "n/total". */
+@Composable
+internal fun CampoDigitos(
+    valor: String, alCambiar: (String) -> Unit, etiqueta: String, digitos: Int, error: Boolean,
+    prefijo: String? = null, ayuda: String? = null, teclado: KeyboardType = KeyboardType.NumberPassword
+) {
+    OutlinedTextField(
+        valor, alCambiar,
+        label = { Text(etiqueta) },
+        prefix = prefijo?.let { { Text(it) } },
+        keyboardOptions = KeyboardOptions(keyboardType = teclado), singleLine = true, shape = FormaCampo,
+        colors = coloresCampo(), isError = error,
+        supportingText = {
+            Row {
+                Text(
+                    if (error) "Debe tener exactamente $digitos dígitos${ayuda?.let { " · $it" } ?: ""}" else ayuda ?: "$digitos dígitos",
+                    Modifier.weight(1f)
+                )
+                Text("${valor.length}/$digitos", color = if (valor.length == digitos && !error) Teal else TextoSecundario)
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
 /** Pantalla 2 — Crear Cuenta: selección de rol (tarjetas) y datos. */
 @Composable
 fun RegistroScreen(
@@ -158,12 +187,13 @@ fun RegistroScreen(
     nombreInicial: String,
     alVolver: () -> Unit,
     alRegistrarAdmin: (String, String) -> Unit,
-    alRegistrarColaborador: (String, String, String, String) -> Unit
+    alRegistrarColaborador: (String, TipoDocumento, String, String, String) -> Unit
 ) {
     var esAdmin by rememberSaveable { mutableStateOf<Boolean?>(null) }
     var nombre by rememberSaveable { mutableStateOf(nombreInicial) }
     var empresa by rememberSaveable { mutableStateOf("") }
     var dni by rememberSaveable { mutableStateOf("") }
+    var tipoDoc by rememberSaveable { mutableStateOf(TipoDocumento.DNI) }
     var telefono by rememberSaveable { mutableStateOf("") }
     var codigo by rememberSaveable { mutableStateOf("") }
 
@@ -186,13 +216,28 @@ fun RegistroScreen(
                 }
                 false -> {
                     Campo(nombre, { nombre = it }, "Nombre Completo")
-                    Campo(dni, { dni = it.filter(Char::isLetterOrDigit).take(12) }, "DNI / CE", KeyboardOptions(keyboardType = KeyboardType.Number))
-                    Campo(telefono, { telefono = it.filter { c -> c.isDigit() || c == '+' }.take(15) }, "Número de Celular", KeyboardOptions(keyboardType = KeyboardType.Phone))
+                    Text("Documento de identidad", style = MaterialTheme.typography.labelLarge, color = AzulMarino)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TipoDocumento.entries.forEach { t ->
+                            FilterChip(
+                                selected = tipoDoc == t,
+                                onClick = { tipoDoc = t; dni = t.limpiar(dni) },
+                                label = { Text(t.nombreLargo) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Teal, selectedLabelColor = Color.White)
+                            )
+                        }
+                    }
+                    CampoDigitos(dni, { dni = tipoDoc.limpiar(it) }, "Número de ${tipoDoc.etiqueta}", tipoDoc.digitos,
+                        error = dni.isNotEmpty() && dni.length < tipoDoc.digitos)
+                    CampoDigitos(telefono, { telefono = Celular.limpiar(it) }, "Número de celular", Celular.DIGITOS,
+                        error = telefono.isNotEmpty() && !Celular.esValido(telefono) && (telefono.length == Celular.DIGITOS || telefono.first() != '9'),
+                        prefijo = "+51 ", ayuda = "Debe empezar con 9", teclado = KeyboardType.Phone)
                     Campo(codigo, { codigo = it.uppercase().take(10) }, "Código de Administrador",
                         KeyboardOptions(capitalization = KeyboardCapitalization.Characters), obligatorio = true)
                     Text("Proporcionado por tu jefe (formato ADM-XXXX-X).", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-                    BotonPill("Registrarse", { alRegistrarColaborador(nombre.trim(), dni.trim(), telefono.trim(), codigo.trim()) },
-                        enabled = !estado.procesando && nombre.isNotBlank() && dni.length >= 8 && codigo.matches(Regex("ADM-\\d{4}-[A-Z]")))
+                    BotonPill("Registrarse", { alRegistrarColaborador(nombre.trim(), tipoDoc, dni, telefono, codigo.trim()) },
+                        enabled = !estado.procesando && nombre.isNotBlank() && tipoDoc.esValido(dni) && Celular.esValido(telefono) &&
+                            codigo.matches(Regex("ADM-\\d{4}-[A-Z]")))
                 }
                 null -> Text("Elige cómo usarás la aplicación.", color = TextoSecundario)
             }

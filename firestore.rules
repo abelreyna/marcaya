@@ -70,7 +70,11 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo))
           && get(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo)).data.adminId
                == request.resource.data.adminId
-          && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje', 'horario']))
+          && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje', 'horario'])
+          // Documento con dígitos exactos (DNI 8, Carnet de Extranjería 9) y celular peruano de 9 dígitos
+          && ((request.resource.data.tipoDocumento == 'DNI' && request.resource.data.dni.matches('[0-9]{8}'))
+              || (request.resource.data.tipoDocumento == 'CE' && request.resource.data.dni.matches('[0-9]{9}')))
+          && request.resource.data.telefono.matches('9[0-9]{8}'))
       );
 
       allow update: if isAuthenticated() && fotoValida() && (
@@ -88,7 +92,9 @@ service cloud.firestore {
                == request.resource.data.adminId) ||
         (request.auth.uid == userId
           && !request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(['rol', 'adminId', 'tarifaPorHora', 'regimenLaboral', 'configPago', 'activo', 'horario', 'horaIngresoEsperada'])
+              .hasAny(['rol', 'adminId', 'tarifaPorHora', 'regimenLaboral', 'configPago', 'activo', 'horario', 'horaIngresoEsperada', 'dni', 'tipoDocumento'])
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['telefono'])
+              || request.resource.data.telefono == '' || request.resource.data.telefono.matches('9[0-9]{8}'))
           // ultimoMarcaje solo puede fijarse a la hora del servidor
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ultimoMarcaje'])
               || request.resource.data.ultimoMarcaje == request.time))

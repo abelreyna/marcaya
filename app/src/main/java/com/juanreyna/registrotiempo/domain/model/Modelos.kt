@@ -137,6 +137,7 @@ data class Usuario(
     val nombre: String = "",
     val correo: String = "",
     val dni: String = "",
+    val tipoDocumento: TipoDocumento = TipoDocumento.DNI,
     val telefono: String = "",
     val activo: Boolean = true,
     val horario: Horario = Horario(),

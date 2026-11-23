@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.data.repository
 
+import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
@@ -83,6 +84,7 @@ fun DocumentSnapshot.aUsuario() = Usuario(
     nombre = s("nombre"),
     correo = s("correo"),
     dni = s("dni"),
+    tipoDocumento = enumDe(get("tipoDocumento"), TipoDocumento.DNI),
     telefono = s("telefono"),
     activo = getBoolean("activo") ?: true,
     horario = horarioDe(),

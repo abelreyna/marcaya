@@ -1,5 +1,7 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import com.juanreyna.registrotiempo.ui.login.CampoDigitos
+import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.ui.text.style.TextOverflow
 import kotlin.math.roundToLong
@@ -455,8 +457,8 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
         DialogoColaborador(
             u, e.moneda.simbolo, alCerrar = { editando = null }, alDesvincular = { editando = null; desvinculando = u },
             alEliminar = { editando = null; eliminando = u }
-        ) { cfg, horario, activo ->
-            vm.guardarColaborador(u, cfg, horario, activo); editando = null
+        ) { cfg, horario, activo, tipoDoc, dni ->
+            vm.guardarColaborador(u, cfg, horario, activo, tipoDoc, dni); editando = null
         }
     }
     desvinculando?.let { u ->
@@ -501,8 +503,11 @@ private fun ChipFiltro(texto: String, seleccionado: Boolean, onClick: () -> Unit
 }
 
 @Composable
-private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alDesvincular: () -> Unit, alEliminar: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean) -> Unit) {
+private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alDesvincular: () -> Unit, alEliminar: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean, TipoDocumento, String) -> Unit) {
     var cfg by remember { mutableStateOf(u.configPago) }
+    var tipoDoc by remember { mutableStateOf(u.tipoDocumento) }
+    var dni by remember { mutableStateOf(u.dni) }
+    val dniValido = tipoDoc.esValido(dni)
     var tarifa by remember { mutableStateOf(if (cfg.tarifaPorHora > 0) cfg.tarifaPorHora.toString() else "") }
     var sueldo by remember { mutableStateOf(if (cfg.sueldoBase > 0) cfg.sueldoBase.toString() else "") }
     var horario by remember { mutableStateOf(u.horario) }
@@ -518,6 +523,12 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
         title = { Text(u.nombre, fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Documento de identidad", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TipoDocumento.entries.forEach { t -> ChipFiltro(t.nombreLargo, tipoDoc == t) { tipoDoc = t; dni = t.limpiar(dni) } }
+                }
+                CampoDigitos(dni, { dni = tipoDoc.limpiar(it) }, "Número de ${tipoDoc.etiqueta}", tipoDoc.digitos, error = !dniValido)
+                HorizontalDivider(color = Borde)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ChipFiltro("Simple", cfg.modo == ModoPago.SIMPLE) { cfg = cfg.copy(modo = ModoPago.SIMPLE) }
                     ChipFiltro("Avanzado Perú", cfg.modo == ModoPago.AVANZADO) { cfg = cfg.copy(modo = ModoPago.AVANZADO) }
@@ -607,9 +618,9 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                         sueldoBase = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0,
                         recargoExtra1 = recargo1.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 25.0,
                         recargoExtra2 = recargo2.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 300.0) ?: 35.0
-                    ), horario.copy(toleranciaMin = toleranciaMin ?: 5), activo
+                    ), horario.copy(toleranciaMin = toleranciaMin ?: 5), activo, tipoDoc, dni
                 )
-            }, enabled = horarioValido) { Text("Guardar", color = Teal, fontWeight = FontWeight.Bold) }
+            }, enabled = horarioValido && dniValido) { Text("Guardar", color = Teal, fontWeight = FontWeight.Bold) }
         },
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } }
     )

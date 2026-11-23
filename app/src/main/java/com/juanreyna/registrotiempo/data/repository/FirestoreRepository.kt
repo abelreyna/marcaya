@@ -1,5 +1,7 @@
 package com.juanreyna.registrotiempo.data.repository
 
+import com.juanreyna.registrotiempo.domain.model.Celular
+import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.async
@@ -112,15 +114,17 @@ class FirestoreRepository @Inject constructor() {
 
     /** Registro del Colaborador vinculado mediante el Código de Administrador. */
     suspend fun registrarColaborador(
-        uid: String, correo: String, nombre: String, dni: String, telefono: String, codigo: String
+        uid: String, correo: String, nombre: String, tipoDocumento: TipoDocumento, dni: String, telefono: String, codigo: String
     ) {
+        require(tipoDocumento.esValido(dni)) { "El ${tipoDocumento.etiqueta} debe tener ${tipoDocumento.digitos} dígitos" }
+        require(Celular.esValido(telefono)) { "El celular debe tener 9 dígitos y empezar con 9" }
         val cod = codigo.trim().uppercase()
         val doc = codigos.document(cod).get().await()
         val adminId = doc.getString("adminId") ?: error("Código de Administrador no válido")
         usuarios.document(uid).set(
             mapOf(
                 "rol" to Rol.COLABORADOR.name, "adminId" to adminId, "codigoVinculo" to cod,
-                "nombre" to nombre, "correo" to correo, "dni" to dni, "telefono" to telefono,
+                "nombre" to nombre, "correo" to correo, "dni" to dni, "tipoDocumento" to tipoDocumento.name, "telefono" to telefono,
                 "activo" to true, "horaIngresoEsperada" to Horario().entrada, // el horario completo lo fija el administrador
                 "creado" to FieldValue.serverTimestamp()
             )
@@ -136,9 +140,16 @@ class FirestoreRepository @Inject constructor() {
         awaitClose { reg.remove() }
     }
 
-    suspend fun actualizarColaborador(uid: String, config: ConfigPago, horario: Horario, activo: Boolean) {
+    /** [tipoDocumento] y [dni] nulos = no se cambia el documento. */
+    suspend fun actualizarColaborador(
+        uid: String, config: ConfigPago, horario: Horario, activo: Boolean, tipoDocumento: TipoDocumento? = null, dni: String? = null
+    ) {
+        val documento = if (tipoDocumento != null && dni != null) {
+            require(tipoDocumento.esValido(dni)) { "El ${tipoDocumento.etiqueta} debe tener ${tipoDocumento.digitos} dígitos" }
+            mapOf("tipoDocumento" to tipoDocumento.name, "dni" to dni)
+        } else emptyMap()
         usuarios.document(uid).update(
-            mapOf(
+            documento + mapOf(
                 "configPago" to config.aMapa(), "activo" to activo,
                 "horario" to horario.aMapa(), "horaIngresoEsperada" to horario.entrada
             )

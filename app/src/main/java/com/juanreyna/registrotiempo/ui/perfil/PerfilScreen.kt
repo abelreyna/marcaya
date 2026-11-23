@@ -1,5 +1,7 @@
 package com.juanreyna.registrotiempo.ui.perfil
 
+import com.juanreyna.registrotiempo.ui.login.CampoDigitos
+import com.juanreyna.registrotiempo.domain.model.Celular
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
@@ -133,7 +135,7 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
             if (u == null) { Cargando(); return@MarcoPantalla }
             val esAdmin = u.rol == Rol.ADMINISTRADOR
             var nombre by rememberSaveable(u.nombre) { mutableStateOf(u.nombre) }
-            var telefono by rememberSaveable(u.telefono) { mutableStateOf(u.telefono) }
+            var telefono by rememberSaveable(u.telefono) { mutableStateOf(Celular.limpiar(u.telefono)) }
             val hayCambios = nombre.trim() != u.nombre || telefono.trim() != u.telefono
 
             Column(
@@ -179,15 +181,14 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
                         nombre, { nombre = it.take(60) }, label = { Text("Nombre completo") }, singleLine = true,
                         shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        telefono, { telefono = it.filter { c -> c.isDigit() || c in "+ " }.take(15) },
-                        label = { Text("Teléfono de contacto") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth()
+                    CampoDigitos(
+                        telefono, { telefono = Celular.limpiar(it) }, "Número de celular", Celular.DIGITOS,
+                        error = telefono.isNotEmpty() && !Celular.esValido(telefono) && (telefono.length == Celular.DIGITOS || telefono.first() != '9'),
+                        prefijo = "+51 ", ayuda = "Debe empezar con 9", teclado = KeyboardType.Phone
                     )
                     BotonPill(
                         if (ui.guardando) "Guardando…" else "Guardar cambios", { vm.guardarDatos(nombre, telefono) },
-                        Modifier.fillMaxWidth(), enabled = hayCambios && nombre.isNotBlank() && !ui.guardando, alto = 48.dp
+                        Modifier.fillMaxWidth(), enabled = hayCambios && nombre.isNotBlank() && (telefono.isEmpty() || Celular.esValido(telefono)) && !ui.guardando, alto = 48.dp
                     )
                 }
 
@@ -204,7 +205,7 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
                         FilaDato("Plan", ui.empresa?.plan ?: "FREE")
                     } else {
                         HorizontalDivider(color = Borde)
-                        FilaDato("DNI / CE", u.dni.ifBlank { "—" })
+                        FilaDato(u.tipoDocumento.etiqueta, u.dni.ifBlank { "—" })
                         HorizontalDivider(color = Borde)
                         FilaDato("Horario", "${u.horario.entrada} – ${u.horario.salida}")
                         HorizontalDivider(color = Borde)

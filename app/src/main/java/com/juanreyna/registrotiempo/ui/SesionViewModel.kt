@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui
 
+import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import android.widget.Toast
 import android.app.Activity
 import android.app.Application
@@ -146,9 +147,9 @@ class SesionViewModel @Inject constructor(
         repo.registrarAdministrador(u.uid, u.email.orEmpty(), nombre, empresa)
     }
 
-    fun registrarColaborador(nombre: String, dni: String, telefono: String, codigo: String) = registrar {
+    fun registrarColaborador(nombre: String, tipoDocumento: TipoDocumento, dni: String, telefono: String, codigo: String) = registrar {
         val u = auth.usuarioActual!!
-        repo.registrarColaborador(u.uid, u.email.orEmpty(), nombre, dni, telefono, codigo)
+        repo.registrarColaborador(u.uid, u.email.orEmpty(), nombre, tipoDocumento, dni, telefono, codigo)
     }
 
     private fun registrar(accion: suspend () -> Unit) = viewModelScope.launch {

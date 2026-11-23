@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import com.juanreyna.registrotiempo.util.AvisosIncidencias
 import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
 import com.juanreyna.registrotiempo.domain.model.EstadoIncidencia
@@ -152,8 +153,8 @@ class AdminViewModel @Inject constructor(
 
     fun guardarGeocerca(g: Geocerca) = ejecutar("Geocerca guardada") { repo.guardarGeocerca(adminId, g) }
 
-    fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean) =
-        ejecutar("Datos de ${u.nombre} actualizados") { repo.actualizarColaborador(u.uid, cfg, horario, activo) }
+    fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean, tipoDocumento: TipoDocumento, dni: String) =
+        ejecutar("Datos de ${u.nombre} actualizados") { repo.actualizarColaborador(u.uid, cfg, horario, activo, tipoDocumento, dni) }
 
     /** Pestaña Horarios: aplica un mismo horario a los colaboradores seleccionados. */
     fun aplicarHorario(uids: List<String>, horario: Horario) =

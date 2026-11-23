@@ -23,6 +23,7 @@ import com.juanreyna.registrotiempo.domain.vip.VipAccessManager
 import com.juanreyna.registrotiempo.domain.vip.VipConfig
 import com.juanreyna.registrotiempo.util.GeoUtils
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -141,5 +142,17 @@ class DomainTest {
         assertEquals("Falta no autorizada", de("2026-11-19", TipoIncidencia.FALTA).titulo)
         assertTrue(inc.none { it.fecha == "2026-11-20" || it.fecha == "2026-11-16" }) // puntual / antes del registro
         assertEquals(4, inc.size)
+    }
+
+    @Test
+    fun documentoYCelular_digitosExactos() {
+        val dni = com.juanreyna.registrotiempo.domain.model.TipoDocumento.DNI
+        val ce = com.juanreyna.registrotiempo.domain.model.TipoDocumento.CE
+        val cel = com.juanreyna.registrotiempo.domain.model.Celular
+        assertEquals("12345678", dni.limpiar("12a345678999"))
+        assertTrue(dni.esValido("12345678")); assertFalse(dni.esValido("1234567")); assertFalse(dni.esValido("123456789"))
+        assertTrue(ce.esValido("001234567")); assertFalse(ce.esValido("12345678"))
+        assertEquals("987654321", cel.limpiar("+51 987 654 321"))
+        assertTrue(cel.esValido("987654321")); assertFalse(cel.esValido("187654321")); assertFalse(cel.esValido("98765432"))
     }
 }
