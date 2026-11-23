@@ -108,7 +108,12 @@ data class ConfigPago(
      * Modo Avanzado: true = remuneración por hora (se paga cada hora trabajada × [tarifaPorHora], con beneficios de ley);
      * false = sueldo mensual fijo ([sueldoBase] por 30 días).
      */
-    val pagoPorHora: Boolean = false
+    val pagoPorHora: Boolean = false,
+    /** Datos completos para la planilla y la boleta (Modo Avanzado): apellidos y nombres como en el DNI, y centro de costo. */
+    val apellidoPaterno: String = "",
+    val apellidoMaterno: String = "",
+    val nombres: String = "",
+    val centroCosto: String = ""
 ) {
     /** Valor de una hora ordinaria: tarifa (Simple o Avanzado por hora) o sueldo mensual ÷ 240 h. */
     val valorHora: Double get() = if (modo == ModoPago.SIMPLE || pagoPorHora) tarifaPorHora else sueldoBase / 240.0

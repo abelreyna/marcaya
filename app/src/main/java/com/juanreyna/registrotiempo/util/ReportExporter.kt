@@ -27,6 +27,26 @@ object ReportExporter {
 
     private fun carpeta(context: Context) = File(context.cacheDir, "reportes").apply { mkdirs() }
 
+    /**
+     * Libro Excel del Modo Avanzado (parámetros legales, planilla mensual y boleta individual con fórmulas).
+     * @param soloUid descarga individual: solo ese colaborador.
+     * @param soloParametros solo la hoja de parámetros legales.
+     */
+    fun planillaXlsx(
+        context: Context, empresa: Empresa, resumenes: List<ResumenColaborador>, mes: String,
+        soloUid: String? = null, soloParametros: Boolean = false
+    ): File {
+        val datos = if (soloUid != null) resumenes.filter { it.usuario.uid == soloUid } else resumenes
+        val sufijo = when {
+            soloParametros -> "parametros_legales"
+            soloUid != null -> "boleta_" + (datos.firstOrNull()?.usuario?.dni?.ifBlank { null } ?: soloUid.take(6))
+            else -> "planilla_completa"
+        }
+        val f = File(carpeta(context), "${sufijo}_$mes.xlsx")
+        f.outputStream().use { PlanillaExcel.escribir(it, empresa, datos, mes, incluirPlanilla = !soloParametros) }
+        return f
+    }
+
     fun compartir(context: Context, archivo: File, mime: String) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", archivo)
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -97,7 +117,7 @@ object ReportExporter {
         l.linea("BOLETA DE PAGO PROYECTADA", l.titulo, salto = 22f)
         l.linea(empresa.razonSocial.ifBlank { empresa.nombreComercial }, l.negrita)
         l.linea("RUC: ${empresa.ruc.ifBlank { "— (registrar en Reportes → Datos del empleador)" }}   Periodo: $mesEtiqueta")
-        l.linea("Trabajador: ${u.nombre}   ${u.tipoDocumento.etiqueta}: ${u.dni.ifBlank { "—" }}")
+        l.linea("Trabajador: ${PlanillaExcel.nombreLegal(u)}   ${u.tipoDocumento.etiqueta}: ${u.dni.ifBlank { "—" }}")
         if (b.modo == ModoPago.AVANZADO) {
             l.linea("Cargo: ${cfg.cargo.ifBlank { "—" }}   Fecha de ingreso: ${ResumenMensual.fechaIngreso(u)?.split("-")?.reversed()?.joinToString("/") ?: "—"}")
             l.linea("Régimen laboral: ${cfg.regimen.etiqueta}   Régimen pensionario: ${cfg.sistemaPension.etiqueta}${if (cfg.sistemaPension != SistemaPension.ONP) "   CUSPP: ${cfg.cuspp.ifBlank { "—" }}" else ""}")

@@ -73,6 +73,9 @@ data class Boleta(
     /** Días pagados del mes (Modo Avanzado). */
     val diasLaborados: Int? = null,
     val faltas: Int = 0,
+    /** Días del mes desde la fecha de ingreso y minutos de tardanza descontados (Modo Avanzado). */
+    val diasComputables: Int = 30,
+    val minutosTardanza: Long = 0,
     /** Observaciones legales para el empleador (sueldo menor a la RMV, etc.). */
     val advertencias: List<String> = emptyList()
 ) {
@@ -307,7 +310,8 @@ object PlanillaPeruCalculator {
 
         return Boleta(
             ModoPago.AVANZADO, ordinarias, he25, he35, ingresos, descuentos, aportes, provisiones,
-            diasLaborados = diasPagados, faltas = faltas, advertencias = advertencias
+            diasLaborados = diasPagados, faltas = faltas, diasComputables = diasComputables,
+            minutosTardanza = if (porHora) 0 else periodo.minutosTardanza, advertencias = advertencias
         )
     }
 
