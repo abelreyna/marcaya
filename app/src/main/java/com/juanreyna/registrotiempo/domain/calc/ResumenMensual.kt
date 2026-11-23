@@ -42,7 +42,7 @@ object ResumenMensual {
 
     fun diaDe(fecha: String, delDia: List<Marcaje>, ahoraMillis: Long, horario: Horario): DiaTrabajado {
             val r = JornadaCalculator.resumir(delDia, ahoraMillis)
-            val inc = JornadaCalculator.evaluar(delDia, r, horario, ahoraMillis)
+            val inc = JornadaCalculator.evaluar(delDia, r, horario.deFecha(fecha), ahoraMillis)
             val ingreso = delDia.firstOrNull { it.tipo == TipoMarcaje.INGRESO }?.timestampMillis
             return DiaTrabajado(
                 fecha = fecha,

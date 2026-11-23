@@ -126,8 +126,9 @@ object JornadaCalculator {
         val tarde = (rel(ingreso) - entradaProg).toLong()
         val minutosTarde = if (tarde > tol) tarde else 0L
 
+        // Sin descanso programado ese día no hay exceso que medir (el descanso igual no se paga)
         val exceso = resumen.minutosDescanso - horario.minutosDescansoProgramado
-        val minutosExceso = if (exceso > tol) exceso else 0L
+        val minutosExceso = if (horario.minutosDescansoProgramado > 0 && exceso > tol) exceso else 0L
 
         val fin = ordenados.lastOrNull { it.tipo == TipoMarcaje.SALIDA }?.timestampMillis
             ?: if (resumen.abierta && !resumen.enDescanso) ahoraMillis else null

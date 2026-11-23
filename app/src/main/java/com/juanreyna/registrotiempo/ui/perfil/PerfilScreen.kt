@@ -1,5 +1,7 @@
 package com.juanreyna.registrotiempo.ui.perfil
 
+import com.juanreyna.registrotiempo.ui.admin.diasTexto
+import com.juanreyna.registrotiempo.ui.admin.horasPorDia
 import com.juanreyna.registrotiempo.ui.login.CampoDigitos
 import com.juanreyna.registrotiempo.domain.model.Celular
 import android.Manifest
@@ -203,9 +205,18 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
                         HorizontalDivider(color = Borde)
                         FilaDato(u.tipoDocumento.etiqueta, u.dni.ifBlank { "—" })
                         HorizontalDivider(color = Borde)
-                        FilaDato("Horario", "${u.horario.entrada} – ${u.horario.salida}")
-                        HorizontalDivider(color = Borde)
-                        FilaDato("Descanso", "${u.horario.inicioDescanso} – ${u.horario.finDescanso}")
+                        if (u.horario.porDia) {
+                            u.horario.horasPorDia().forEachIndexed { i, (dia, horas) ->
+                                if (i > 0) HorizontalDivider(color = Borde)
+                                FilaDato(dia, horas)
+                            }
+                        } else {
+                            FilaDato("Horario", "${u.horario.entrada} – ${u.horario.salida}")
+                            HorizontalDivider(color = Borde)
+                            FilaDato("Descanso", "${u.horario.inicioDescanso} – ${u.horario.finDescanso}")
+                            HorizontalDivider(color = Borde)
+                            FilaDato("Días", u.horario.diasTexto())
+                        }
                         HorizontalDivider(color = Borde)
                         FilaDato("Tolerancia", "${u.horario.toleranciaMin} min")
                     }

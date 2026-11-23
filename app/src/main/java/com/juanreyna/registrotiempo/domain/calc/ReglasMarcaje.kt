@@ -29,14 +29,15 @@ object ReglasMarcaje {
             TipoMarcaje.INGRESO -> dif(h.entrada).takeIf { it > tol }
                 ?.let { Hallazgo(TipoIncidencia.TARDANZA, it.toLong(), "Ingresó a las $hora · $it min tarde (entrada ${h.entrada})") }
 
-            TipoMarcaje.INICIO_DESCANSO -> dif(h.inicioDescanso).takeIf { kotlin.math.abs(it) > tol }?.let {
+            // Si ese día no tiene descanso programado, el descanso no se compara con ninguna hora
+            TipoMarcaje.INICIO_DESCANSO -> if (h.minutosDescansoProgramado == 0) null else dif(h.inicioDescanso).takeIf { kotlin.math.abs(it) > tol }?.let {
                 Hallazgo(
                     TipoIncidencia.DESCANSO_FUERA_HORARIO, kotlin.math.abs(it).toLong(),
                     "Salió a descanso a las $hora · ${kotlin.math.abs(it)} min ${if (it < 0) "antes" else "después"} (descanso ${h.inicioDescanso}–${h.finDescanso})"
                 )
             }
 
-            TipoMarcaje.FIN_DESCANSO -> {
+            TipoMarcaje.FIN_DESCANSO -> if (h.minutosDescansoProgramado == 0) null else {
                 val tarde = dif(h.finDescanso)
                 val exceso = inicioDescansoMillis?.let { ((millis - it) / 60_000).toInt() - h.minutosDescansoProgramado } ?: 0
                 when {

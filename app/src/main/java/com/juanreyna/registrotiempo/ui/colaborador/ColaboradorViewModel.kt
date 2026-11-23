@@ -162,7 +162,7 @@ class ColaboradorViewModel @Inject constructor(
     /** Incidencia del marcaje recién registrado frente al horario (tardanza, descanso fuera de horario, retorno tardío, salida antes o después). */
     private fun incidenciaAlMarcar(u: Usuario, tipo: TipoMarcaje): Pair<TipoIncidencia, String>? =
         ReglasMarcaje.evaluar(
-            u.horario, tipo, System.currentTimeMillis(),
+            u.horario.deFecha(ui.value.marcajesHoy.firstOrNull()?.fecha ?: Fechas.hoy()), tipo, System.currentTimeMillis(),
             ui.value.marcajesHoy.lastOrNull { it.tipo == TipoMarcaje.INICIO_DESCANSO }?.timestampMillis
         )?.let { it.tipo to it.detalle }
 

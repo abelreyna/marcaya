@@ -195,7 +195,7 @@ object ReportExporter {
             l.linea("${u.nombre} — DNI/CE ${u.dni.ifBlank { "—" }}", l.negrita)
             l.linea(
                 "${if (u.configPago.modo == ModoPago.SIMPLE) "Modo Simple" else "Modo Avanzado · ${u.configPago.regimen.etiqueta}"}   " +
-                    "Valor hora: ${m(mon, ReporteCostos.valorHora(u.configPago))}   Horario: ${u.horario.entrada}–${u.horario.salida}"
+                    "Valor hora: ${m(mon, ReporteCostos.valorHora(u.configPago))}   Horario: ${if (u.horario.porDia) "por día" else "${u.horario.entrada}–${u.horario.salida}"}"
             )
             if (c.dias.isEmpty()) { l.linea("Sin días trabajados en el periodo."); l.separador(); return@forEach }
             l.columnas(listOf("Fecha", "Ingreso", "Salida", "H. ord.", "H. extra", "Pago ord.", "Pago extra", "Total día"), xs, l.negrita)

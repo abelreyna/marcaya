@@ -364,7 +364,7 @@ private fun PestanaPanel(vm: AdminViewModel, ui: UiAdmin) {
 @Composable
 private fun DialogoSalida(f: FilaMonitoreo, alCerrar: () -> Unit, alConfirmar: (String) -> Unit) {
     val ahora = Fechas.hhmm(System.currentTimeMillis())
-    val programada = f.usuario.horario.salida
+    val programada = f.usuario.horario.deFecha(Fechas.hoy()).salida
     var hora by remember { mutableStateOf(if (Horario.minutos(programada) <= Horario.minutos(ahora)) programada else ahora) }
     AlertDialog(
         onDismissRequest = alCerrar,
@@ -521,7 +521,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
     var horario by remember { mutableStateOf(u.horario) }
     var tolerancia by remember { mutableStateOf(u.horario.toleranciaMin.toString()) }
     val toleranciaMin = tolerancia.toIntOrNull()
-    val horarioValido = horario.minutosJornadaProgramada > 0 && toleranciaMin != null && toleranciaMin in 0..60
+    val horarioValido = horario.jornadasValidas() && toleranciaMin != null && toleranciaMin in 0..60
     var activo by remember { mutableStateOf(u.activo) }
     AlertDialog(
         onDismissRequest = alCerrar,
@@ -568,28 +568,32 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                         style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
                 }
                 Text("Horario de trabajo", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CampoHora("Entrada", horario.entrada, Modifier.weight(1f)) { horario = horario.copy(entrada = it) }
-                    CampoHora("Salida", horario.salida, Modifier.weight(1f)) { horario = horario.copy(salida = it) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { horario = horario.copy(inicioDescanso = it) }
-                    CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { horario = horario.copy(finDescanso = it) }
-                }
                 SelectorDias(horario.diasLaborables) { horario = horario.copy(diasLaborables = it) }
+                EditorTurnos(horario) { horario = it }
+                if (!horario.porDia) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CampoHora("Entrada", horario.entrada, Modifier.weight(1f)) { horario = horario.copy(entrada = it) }
+                        CampoHora("Salida", horario.salida, Modifier.weight(1f)) { horario = horario.copy(salida = it) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { horario = horario.copy(inicioDescanso = it) }
+                        CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { horario = horario.copy(finDescanso = it) }
+                    }
+                }
                 OutlinedTextField(
                     tolerancia, { tolerancia = it.filter(Char::isDigit).take(2) }, label = { Text("Tolerancia (minutos)") },
                     shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     isError = toleranciaMin == null || toleranciaMin > 60
                 )
                 Text(
-                    if (horario.minutosJornadaProgramada > 0)
-                        "Jornada: ${Fechas.duracion(horario.minutosJornadaProgramada.toLong())} · Descanso: ${Fechas.duracion(horario.minutosDescansoProgramado.toLong())}\n" +
+                    if (horario.jornadasValidas())
+                        (if (horario.porDia) "Total semanal: ${Fechas.duracion(horario.minutosSemana())}\n"
+                        else "Jornada: ${Fechas.duracion(horario.minutosJornadaProgramada.toLong())} · Descanso: ${Fechas.duracion(horario.minutosDescansoProgramado.toLong())}\n") +
                             "Tardanza: ingreso después de la entrada + tolerancia. Horas extras: salida después de la hora de salida. " +
                             "El exceso de descanso no se paga."
                     else "Revisa el horario: la jornada no puede quedar en cero.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (horario.minutosJornadaProgramada > 0) TextoSecundario else Rojo
+                    color = if (horario.jornadasValidas()) TextoSecundario else Rojo
                 )
                 Text("Para cambiar el horario de varios colaboradores a la vez usa la pestaña Horarios.",
                     style = MaterialTheme.typography.bodySmall, color = Teal)

@@ -102,8 +102,14 @@ data class ConfigPago(
     val recargoExtra2: Double = 35.0
 )
 
+/** Horas de un día concreto de la semana. Sin descanso: inicio y fin de descanso iguales. */
+data class Turno(val entrada: String, val inicioDescanso: String, val finDescanso: String, val salida: String) {
+    val tieneDescanso: Boolean get() = inicioDescanso != finDescanso
+}
+
 /**
  * Horario de trabajo del colaborador (horas "HH:mm", zona Lima).
+ * - [turnos]: horas propias de algunos días (ISO 1 = lunes … 7 = domingo); los demás días usan el horario general.
  * - Ingreso después de [entrada] + [toleranciaMin] → tardanza.
  * - Descanso más largo que el programado + tolerancia → exceso de descanso (no se paga).
  * - Salida después de [salida] + tolerancia → horas extras (desde la hora de salida programada).
@@ -115,9 +121,23 @@ data class Horario(
     val salida: String = "17:00",
     val toleranciaMin: Int = 5,
     /** Días laborables (ISO: 1 = lunes … 7 = domingo). Por defecto lunes a sábado. */
-    val diasLaborables: List<Int> = listOf(1, 2, 3, 4, 5, 6)
+    val diasLaborables: List<Int> = listOf(1, 2, 3, 4, 5, 6),
+    val turnos: Map<Int, Turno> = emptyMap()
 ) {
     fun trabajaEl(diaIso: Int) = diaIso in diasLaborables
+
+    val turnoGeneral: Turno get() = Turno(entrada, inicioDescanso, finDescanso, salida)
+
+    /** true si algún día laborable tiene horas propias. */
+    val porDia: Boolean get() = turnos.keys.any { it in diasLaborables }
+
+    /** Horario efectivo de un día de la semana: las horas propias de ese día o, si no tiene, las generales. */
+    fun delDia(diaIso: Int): Horario = turnos[diaIso]?.let {
+        copy(entrada = it.entrada, inicioDescanso = it.inicioDescanso, finDescanso = it.finDescanso, salida = it.salida, turnos = emptyMap())
+    } ?: this
+
+    /** Horario efectivo de una fecha "yyyy-MM-dd". */
+    fun deFecha(fecha: String): Horario = if (turnos.isEmpty()) this else delDia(com.juanreyna.registrotiempo.util.Fechas.diaSemanaIso(fecha))
 
     val minutosDescansoProgramado: Int get() = diferencia(inicioDescanso, finDescanso)
     val minutosJornadaProgramada: Int get() = diferencia(entrada, salida) - minutosDescansoProgramado

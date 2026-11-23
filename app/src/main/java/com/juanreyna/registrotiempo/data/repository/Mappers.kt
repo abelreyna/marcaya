@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.data.repository
 
+import com.juanreyna.registrotiempo.domain.model.Turno
 import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
@@ -42,7 +43,10 @@ fun ConfigPago.aMapa(): Map<String, Any> = mapOf(
 fun Horario.aMapa(): Map<String, Any> = mapOf(
     "entrada" to entrada, "inicioDescanso" to inicioDescanso,
     "finDescanso" to finDescanso, "salida" to salida, "toleranciaMin" to toleranciaMin,
-    "diasLaborables" to diasLaborables
+    "diasLaborables" to diasLaborables,
+    "turnos" to turnos.filterKeys { it in diasLaborables }.entries.associate { (dia, t) ->
+        dia.toString() to mapOf("entrada" to t.entrada, "inicioDescanso" to t.inicioDescanso, "finDescanso" to t.finDescanso, "salida" to t.salida)
+    }
 )
 
 /** Lee el horario; los perfiles antiguos solo tenían "horaIngresoEsperada". */
@@ -57,7 +61,14 @@ private fun DocumentSnapshot.horarioDe(): Horario {
         finDescanso = m["finDescanso"] as? String ?: d.finDescanso,
         salida = m["salida"] as? String ?: d.salida,
         toleranciaMin = (m["toleranciaMin"] as? Number)?.toInt() ?: d.toleranciaMin,
-        diasLaborables = (m["diasLaborables"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }?.sorted() ?: d.diasLaborables
+        diasLaborables = (m["diasLaborables"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }?.sorted() ?: d.diasLaborables,
+        turnos = (m["turnos"] as? Map<String, Any?>).orEmpty().mapNotNull { (k, v) ->
+            val dia = k.toIntOrNull()?.takeIf { it in 1..7 } ?: return@mapNotNull null
+            val t = v as? Map<String, Any?> ?: return@mapNotNull null
+            val entrada = t["entrada"] as? String ?: return@mapNotNull null
+            val salida = t["salida"] as? String ?: return@mapNotNull null
+            dia to Turno(entrada, t["inicioDescanso"] as? String ?: salida, t["finDescanso"] as? String ?: salida, salida)
+        }.toMap()
     )
 }
 

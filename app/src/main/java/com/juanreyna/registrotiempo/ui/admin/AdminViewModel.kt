@@ -97,7 +97,7 @@ class AdminViewModel @Inject constructor(
             val costoHoy = PlanillaPeruCalculator.calcularDias(u.configPago, listOf(dia.horas)).let {
                 if (u.configPago.modo == ModoPago.SIMPLE) it.totalIngresos else it.totalIngresos + it.aportesEmpleador.sumOf { a -> a.monto }
             }
-            FilaMonitoreo(u, JornadaCalculator.estado(ms, u.horario), ms.lastOrNull(), horas, costoHoy)
+            FilaMonitoreo(u, JornadaCalculator.estado(ms, u.horario.deFecha(Fechas.hoy())), ms.lastOrNull(), horas, costoHoy)
         })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiAdmin())
 
@@ -134,7 +134,7 @@ class AdminViewModel @Inject constructor(
                         .forEach { add(AvisosIncidencias.Aviso(it.clave, "${it.titulo} · ${it.colaboradorNombre}", "${it.fecha} · ${it.detalle}")) }
                     u.justificaciones.filter { it.estado == EstadoJustificacion.PENDIENTE }
                         .forEach { add(AvisosIncidencias.Aviso("just|${it.id}", "Nueva justificación por revisar", "${it.colaboradorNombre} · ${it.incidencia?.etiqueta ?: it.motivo.etiqueta} (${it.fecha})")) }
-                    sinIngresoHoy(u).forEach { add(AvisosIncidencias.Aviso("sining|${it.uid}|${Fechas.hoy()}", "${it.nombre} aún no marca ingreso", "Entrada programada a las ${it.horario.entrada}")) }
+                    sinIngresoHoy(u).forEach { add(AvisosIncidencias.Aviso("sining|${it.uid}|${Fechas.hoy()}", "${it.nombre} aún no marca ingreso", "Entrada programada a las ${it.horario.deFecha(Fechas.hoy()).entrada}")) }
                 }
                 AvisosIncidencias.notificarNuevos(context, adminId, avisos)
             }
@@ -295,7 +295,7 @@ fun notificacionesSinLeer(u: UiAdmin, incidencias: List<Incidencia>, leidas: Set
     }
     sinIngresoHoy(u).forEach {
         val k = "sining|${it.uid}|${Fechas.hoy()}"
-        if (k !in leidas) add(Notificacion(listOf(k), "Aún no marca ingreso", "${it.nombre} · entrada programada ${it.horario.entrada}"))
+        if (k !in leidas) add(Notificacion(listOf(k), "Aún no marca ingreso", "${it.nombre} · entrada programada ${it.horario.deFecha(Fechas.hoy()).entrada}"))
     }
     val sinJustificar = incidencias.filter { it.estado == EstadoIncidencia.POR_JUSTIFICAR && "inc|${it.clave}" !in leidas }
     if (sinJustificar.isNotEmpty()) add(Notificacion(
@@ -315,7 +315,7 @@ fun sinIngresoHoy(u: UiAdmin, ahora: Long = System.currentTimeMillis()): List<Us
     val minuto = Fechas.minutosDelDia(ahora)
     val dia = Fechas.diaSemanaIso(Fechas.hoy())
     return u.filas.filter { f ->
-        val h = f.usuario.horario
+        val h = f.usuario.horario.deFecha(Fechas.hoy())
         f.usuario.activo && f.estado == EstadoColaborador.SIN_MARCAR && h.trabajaEl(dia) &&
             minuto > Horario.minutos(h.entrada) + h.toleranciaMin
     }.map { it.usuario }

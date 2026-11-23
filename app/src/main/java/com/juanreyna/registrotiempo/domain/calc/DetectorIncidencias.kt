@@ -29,13 +29,10 @@ object DetectorIncidencias {
         ahoraMillis: Long
     ): List<Incidencia> {
         if (!u.activo) return emptyList()
-        val h = u.horario
         val hoy = Fechas.fechaDe(ahoraMillis)
         val minutoAhora = Fechas.minutosDelDia(ahoraMillis)
         val desde = u.creadoMillis?.let { Fechas.fechaDe(it) } ?: ""
         val porFecha = marcajesMes.filter { it.colaboradorId == u.uid }.groupBy { it.fecha }
-        val salidaProg = Horario.minutos(h.salida)
-        val cruza = salidaProg <= Horario.minutos(h.entrada)
         val crudas = mutableListOf<Triple<String, TipoIncidencia, Pair<Long, String>>>()
 
         for (fecha in Fechas.diasDelMes(mes)) {
@@ -43,6 +40,10 @@ object DetectorIncidencias {
             if (fecha < desde) continue
             val delDia = porFecha[fecha].orEmpty()
             val esHoy = fecha == hoy
+            // Horario de ese día de la semana (puede tener horas propias)
+            val h = u.horario.deFecha(fecha)
+            val salidaProg = Horario.minutos(h.salida)
+            val cruza = salidaProg <= Horario.minutos(h.entrada)
             if (delDia.isEmpty()) {
                 // Falta: día laborable sin ningún marcaje, una vez terminada la jornada programada
                 val jornadaTerminada = !esHoy || (!cruza && minutoAhora > salidaProg)

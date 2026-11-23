@@ -74,7 +74,7 @@ internal fun PestanaIncidencias(vm: AdminViewModel, ui: UiAdmin) {
     var filtro by rememberSaveable { mutableStateOf(Filtro.REVISAR) }
     var salidaDe by remember { mutableStateOf<Incidencia?>(null) }
     salidaDe?.let { i ->
-        val programada = ui.colaboradores.firstOrNull { it.uid == i.colaboradorId }?.horario?.salida ?: "17:00"
+        val programada = ui.colaboradores.firstOrNull { it.uid == i.colaboradorId }?.horario?.deFecha(i.fecha)?.salida ?: "17:00"
         var hora by remember(i.clave) { mutableStateOf(programada) }
         AlertDialog(
             onDismissRequest = { salidaDe = null },

@@ -62,6 +62,36 @@ class DomainTest {
         assertEquals((118.5 * 0.13), b.totalDescuentos, 0.01)
     }
 
+    @Test fun horario_distintoPorDia() {
+        // Lunes 08:00–17:00 (general); martes solo en la tarde 14:00–19:00 sin descanso; domingo en la mañana
+        val h = Horario(
+            diasLaborables = listOf(1, 2, 7),
+            turnos = mapOf(
+                2 to com.juanreyna.registrotiempo.domain.model.Turno("14:00", "19:00", "19:00", "19:00"),
+                7 to com.juanreyna.registrotiempo.domain.model.Turno("08:00", "12:00", "12:00", "12:00")
+            )
+        )
+        assertTrue(h.porDia)
+        assertEquals("08:00", h.deFecha("2026-11-23").entrada)          // lunes: horario general
+        assertEquals("14:00", h.deFecha("2026-11-24").entrada)          // martes: tarde
+        assertEquals(300, h.deFecha("2026-11-24").minutosJornadaProgramada)
+        assertEquals(240, h.deFecha("2026-11-22").minutosJornadaProgramada) // domingo: mañana
+
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("America/Lima")).apply {
+            set(2026, 10, 24, 0, 0, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        fun a(hh: Int, m: Int) = cal.timeInMillis + (hh * 60 + m) * 60_000L
+        // Martes: entra 14:20 (20 min tarde según el turno de la tarde) y sale 20:00 (1 h extra)
+        val dia = ResumenMensual.diaDe("2026-11-24", listOf(
+            Marcaje(tipo = TipoMarcaje.INGRESO, timestampMillis = a(14, 20)),
+            Marcaje(tipo = TipoMarcaje.SALIDA, timestampMillis = a(20, 0))
+        ), a(23, 0), h)
+        assertEquals(20L, dia.minutosTarde)
+        assertEquals(60L, dia.minutosExtra)
+        // Sin descanso programado ese día: salir a descanso no genera incidencia
+        assertEquals(null, com.juanreyna.registrotiempo.domain.calc.ReglasMarcaje.evaluar(h.deFecha("2026-11-24"), TipoMarcaje.INICIO_DESCANSO, a(16, 0)))
+    }
+
     @Test fun horario_tardanzaExcesoDescansoYExtras() {
         // Día en hora de Lima: 08:00–17:00, descanso 13:00–14:00, tolerancia 5 min
         val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("America/Lima")).apply {
