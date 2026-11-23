@@ -110,6 +110,25 @@ class DomainTest {
         assertEquals(116.18, PlanillaPeruCalculator.costoDiario(cfg, HorasDia(8.0, 0.0), nov26), 0.001)
     }
 
+    @Test fun planillaAvanzada_columnasCuadranConLaBoleta() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 4800.0, asignacionFamiliar = true, sistemaPension = SistemaPension.AFP_INTEGRA,
+            apellidoPaterno = "Mendoza", apellidoMaterno = "Quispe", nombres = "Carlos Alberto")
+        val u = Usuario(uid = "a", nombre = "carlos", dni = "45891234", configPago = cfg)
+        val b = PlanillaPeruCalculator.calcularDias(cfg, List(20) { HorasDia(8.0, 0.0) } + HorasDia(8.0, 3.0), nov26, PeriodoPlanilla(minutosTardanza = 30))
+        val simple = Usuario(uid = "s", nombre = "simple", configPago = ConfigPago(tarifaPorHora = 10.0))
+        val filas = com.juanreyna.registrotiempo.domain.calc.PlanillaAvanzada.filas(listOf(
+            com.juanreyna.registrotiempo.domain.calc.ResumenColaborador(u, emptyList(), b),
+            com.juanreyna.registrotiempo.domain.calc.ResumenColaborador(simple, emptyList(), PlanillaPeruCalculator.calcularDias(simple.configPago, emptyList()))
+        ))
+        assertEquals(1, filas.size)                                   // solo Modo Avanzado
+        val f = filas.first()
+        assertEquals("Mendoza Quispe, Carlos Alberto", f.nombre)
+        assertEquals(b.totalIngresos, f.basica + f.asignacionFamiliar + f.extras25 + f.extras35 + f.tardanzas, 0.001)
+        assertEquals(b.totalDescuentos, f.onp + f.afpFondo + f.afpPrima + f.afpComision + f.quinta, 0.001)
+        assertEquals(b.costoEmpleador, f.ingresos + f.aportes + f.provisiones, 0.011)
+        assertTrue(f.tardanzas < 0 && f.afpComision > 0 && f.cts > 0)
+    }
+
     @Test fun parametros_vigentesPorMes() {
         assertEquals(1230.0, nov26.rmv, 0.0)
         assertEquals(5500.0, nov26.uit, 0.0)

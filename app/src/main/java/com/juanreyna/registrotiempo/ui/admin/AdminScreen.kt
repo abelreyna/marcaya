@@ -2,7 +2,7 @@ package com.juanreyna.registrotiempo.ui.admin
 
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
-import com.juanreyna.registrotiempo.util.PlanillaExcel
+import com.juanreyna.registrotiempo.domain.calc.PlanillaAvanzada
 import androidx.compose.material.icons.filled.Event
 import com.juanreyna.registrotiempo.ui.components.SelectorDocumento
 import com.juanreyna.registrotiempo.ui.login.CampoDigitos
@@ -939,7 +939,7 @@ private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {
             if (r.isEmpty()) item { TextoCentrado("Sin colaboradores en el periodo.") }
             val avanzados = r.filter { it.usuario.configPago.modo == ModoPago.AVANZADO }
             if (avanzados.isNotEmpty() || ui.empresa!!.modoPagoGlobal == ModoPago.AVANZADO) item {
-                PlanillaExcelSeccion(avanzados, Fechas.etiquetaMes(mes)) { vm.exportar(context, it) }
+                PlanillaAvanzadaSeccion(avanzados, Fechas.etiquetaMes(mes)) { vm.exportar(context, it) }
             }
             item { ReporteCostosSeccion(r, mon, Fechas.etiquetaMes(mes), alExportar = { vm.exportar(context, it) }) }
         }
@@ -947,28 +947,31 @@ private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {
     }
 }
 
-/** Descargas Excel del Modo Avanzado Perú: libro completo, parámetros legales y boleta individual por colaborador. */
+/** Descargas PDF del Modo Avanzado Perú: planilla completa, planilla mensual, parámetros legales y boleta individual. */
 @Composable
-private fun PlanillaExcelSeccion(avanzados: List<ResumenColaborador>, mesEtiqueta: String, alExportar: (String) -> Unit) {
+private fun PlanillaAvanzadaSeccion(avanzados: List<ResumenColaborador>, mesEtiqueta: String, alExportar: (String) -> Unit) {
     var elegir by remember { mutableStateOf(false) }
     Seccion(borde = Borde) {
-        Text("Planilla Modo Avanzado Perú (Excel)", Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
+        Text("Planilla Modo Avanzado Perú (PDF)", Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = AzulMarino)
         Text(
             "$mesEtiqueta · ${avanzados.size} ${if (avanzados.size == 1) "colaborador" else "colaboradores"} en Modo Avanzado. " +
-                "Libro con fórmulas: Parámetros legales, Planilla mensual y Boleta individual. Las celdas amarillas se pueden editar (bonos, adelantos, tasas).",
+                "La planilla completa reúne la planilla mensual, los parámetros legales y una boleta por colaborador.",
             style = MaterialTheme.typography.bodySmall, color = TextoSecundario
         )
-        BotonPill("Planilla completa (3 hojas .xlsx)", { alExportar("XLSX_COMPLETA") }, enabled = avanzados.isNotEmpty(), icono = Icons.Default.TableChart, alto = 52.dp)
+        BotonPill("Planilla completa (PDF)", { alExportar("AVZ_COMPLETA") }, enabled = avanzados.isNotEmpty(), icono = Icons.Default.PictureAsPdf, alto = 52.dp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BotonPillContorno("Parámetros legales", { alExportar("XLSX_PARAMETROS") }, Modifier.weight(1f), color = Teal)
-            Box(Modifier.weight(1f)) {
+            BotonPillContorno("Planilla mensual", { alExportar("AVZ_PLANILLA") }, Modifier.weight(1f), color = Teal, enabled = avanzados.isNotEmpty())
+            BotonPillContorno("Parámetros legales", { alExportar("AVZ_PARAMETROS") }, Modifier.weight(1f), color = Teal)
+        }
+        Row {
+            Box(Modifier.fillMaxWidth()) {
                 BotonPillContorno("Boleta individual", { elegir = true }, Modifier.fillMaxWidth(), color = Teal, enabled = avanzados.isNotEmpty())
                 DropdownMenu(expanded = elegir, onDismissRequest = { elegir = false }) {
                     avanzados.forEach { c ->
                         DropdownMenuItem(
-                            text = { Text("${PlanillaExcel.nombreLegal(c.usuario)} · ${c.usuario.dni.ifBlank { "sin documento" }}") },
-                            onClick = { elegir = false; alExportar("XLSX_BOLETA:${c.usuario.uid}") }
+                            text = { Text("${PlanillaAvanzada.nombreLegal(c.usuario)} · ${c.usuario.dni.ifBlank { "sin documento" }}") },
+                            onClick = { elegir = false; alExportar("AVZ_BOLETA:${c.usuario.uid}") }
                         )
                     }
                 }

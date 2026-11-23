@@ -12,6 +12,7 @@ import androidx.core.content.FileProvider
 import com.juanreyna.registrotiempo.domain.calc.Boleta
 import com.juanreyna.registrotiempo.domain.calc.CostoColaborador
 import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
+import com.juanreyna.registrotiempo.domain.calc.PlanillaAvanzada
 import com.juanreyna.registrotiempo.domain.calc.ResumenColaborador
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.ModoPago
@@ -28,23 +29,22 @@ object ReportExporter {
     private fun carpeta(context: Context) = File(context.cacheDir, "reportes").apply { mkdirs() }
 
     /**
-     * Libro Excel del Modo Avanzado (parámetros legales, planilla mensual y boleta individual con fórmulas).
-     * @param soloUid descarga individual: solo ese colaborador.
-     * @param soloParametros solo la hoja de parámetros legales.
+     * PDF del Modo Avanzado Perú.
+     * @param tipo "COMPLETA" (planilla + parámetros + boletas), "PLANILLA", "PARAMETROS" o "BOLETA" (con [soloUid]).
      */
-    fun planillaXlsx(
-        context: Context, empresa: Empresa, resumenes: List<ResumenColaborador>, mes: String,
-        soloUid: String? = null, soloParametros: Boolean = false
+    fun planillaAvanzadaPdf(
+        context: Context, empresa: Empresa, resumenes: List<ResumenColaborador>, mes: String, tipo: String, soloUid: String? = null
     ): File {
-        val datos = if (soloUid != null) resumenes.filter { it.usuario.uid == soloUid } else resumenes
-        val sufijo = when {
-            soloParametros -> "parametros_legales"
-            soloUid != null -> "boleta_" + (datos.firstOrNull()?.usuario?.dni?.ifBlank { null } ?: soloUid.take(6))
-            else -> "planilla_completa"
+        val hoy = Fechas.hoy()
+        return when (tipo) {
+            "PARAMETROS" -> File(carpeta(context), "parametros_legales_$mes.pdf").also { PlanillaPdf.soloParametros(it, empresa, mes) }
+            "PLANILLA" -> File(carpeta(context), "planilla_mensual_$mes.pdf").also { PlanillaPdf.soloPlanilla(it, empresa, resumenes, mes, hoy) }
+            "BOLETA" -> {
+                val r = resumenes.first { it.usuario.uid == soloUid }
+                File(carpeta(context), "boleta_${r.usuario.dni.ifBlank { r.usuario.uid.take(6) }}_$mes.pdf").also { PlanillaPdf.boletaIndividual(it, empresa, r, mes) }
+            }
+            else -> File(carpeta(context), "planilla_completa_$mes.pdf").also { PlanillaPdf.completa(it, empresa, resumenes, mes, hoy) }
         }
-        val f = File(carpeta(context), "${sufijo}_$mes.xlsx")
-        f.outputStream().use { PlanillaExcel.escribir(it, empresa, datos, mes, incluirPlanilla = !soloParametros) }
-        return f
     }
 
     fun compartir(context: Context, archivo: File, mime: String) {
@@ -108,7 +108,9 @@ object ReportExporter {
 
     private fun m(moneda: String, v: Double) = "$moneda %,.2f".format(v)
 
-    fun boletaPdf(context: Context, empresa: Empresa, resumen: ResumenColaborador, mesEtiqueta: String): File {
+    fun boletaPdf(context: Context, empresa: Empresa, resumen: ResumenColaborador, mesEtiqueta: String, mes: String? = null): File {
+        if (resumen.boleta.modo == ModoPago.AVANZADO && mes != null)
+            return planillaAvanzadaPdf(context, empresa, listOf(resumen), mes, "BOLETA", resumen.usuario.uid)
         val l = Lienzo(PdfDocument()).apply { nuevaPagina() }
         val mon = empresa.moneda.simbolo
         val b: Boleta = resumen.boleta
@@ -117,7 +119,7 @@ object ReportExporter {
         l.linea("BOLETA DE PAGO PROYECTADA", l.titulo, salto = 22f)
         l.linea(empresa.razonSocial.ifBlank { empresa.nombreComercial }, l.negrita)
         l.linea("RUC: ${empresa.ruc.ifBlank { "— (registrar en Reportes → Datos del empleador)" }}   Periodo: $mesEtiqueta")
-        l.linea("Trabajador: ${PlanillaExcel.nombreLegal(u)}   ${u.tipoDocumento.etiqueta}: ${u.dni.ifBlank { "—" }}")
+        l.linea("Trabajador: ${PlanillaAvanzada.nombreLegal(u)}   ${u.tipoDocumento.etiqueta}: ${u.dni.ifBlank { "—" }}")
         if (b.modo == ModoPago.AVANZADO) {
             l.linea("Cargo: ${cfg.cargo.ifBlank { "—" }}   Fecha de ingreso: ${ResumenMensual.fechaIngreso(u)?.split("-")?.reversed()?.joinToString("/") ?: "—"}")
             l.linea("Régimen laboral: ${cfg.regimen.etiqueta}   Régimen pensionario: ${cfg.sistemaPension.etiqueta}${if (cfg.sistemaPension != SistemaPension.ONP) "   CUSPP: ${cfg.cuspp.ifBlank { "—" }}" else ""}")

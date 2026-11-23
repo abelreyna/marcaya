@@ -1,7 +1,6 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
 import androidx.compose.material.icons.filled.TableChart
-import com.juanreyna.registrotiempo.util.PlanillaExcel
 import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
 import com.juanreyna.registrotiempo.ui.admin.diasTexto
 import com.juanreyna.registrotiempo.ui.components.TarjetaAviso
@@ -356,15 +355,8 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
     val mon = ui.empresa!!.moneda.simbolo
     val descargar = {
         if (r != null) scope.launch {
-            val f = withContext(Dispatchers.IO) { ReportExporter.boletaPdf(context, ui.empresa, r, Fechas.etiquetaMes(mes)) }
+            val f = withContext(Dispatchers.IO) { ReportExporter.boletaPdf(context, ui.empresa, r, Fechas.etiquetaMes(mes), mes) }
             ReportExporter.compartir(context, f, "application/pdf")
-        }
-    }
-    // Modo Avanzado: boleta en Excel (parámetros legales + su fila de planilla + boleta)
-    val descargarExcel = {
-        if (r != null) scope.launch {
-            runCatching { withContext(Dispatchers.IO) { ReportExporter.planillaXlsx(context, ui.empresa, listOf(r), mes) } }
-                .onSuccess { ReportExporter.compartir(context, it, PlanillaExcel.MIME) }
         }
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -383,13 +375,6 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
                     onClick = { descargar() }, modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = AzulMarino)
                 ) { Icon(Icons.Default.Download, "Descargar boleta PDF", tint = Color.White) }
-                if (r?.usuario?.configPago?.modo == ModoPago.AVANZADO) {
-                    Spacer(Modifier.width(8.dp))
-                    FilledIconButton(
-                        onClick = { descargarExcel() }, modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Teal)
-                    ) { Icon(Icons.Default.TableChart, "Descargar boleta Excel", tint = Color.White) }
-                }
             }
         }
         if (r == null) { item { Cargando() }; return@LazyColumn }

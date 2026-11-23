@@ -1,6 +1,5 @@
 package com.juanreyna.registrotiempo.ui.admin
 
-import com.juanreyna.registrotiempo.util.PlanillaExcel
 import com.juanreyna.registrotiempo.domain.calc.ParametrosLegales
 import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import com.juanreyna.registrotiempo.util.AvisosIncidencias
@@ -254,10 +253,9 @@ class AdminViewModel @Inject constructor(
                     "CSV" -> ReportExporter.planillaCsv(context, e, datos, mes) to "text/csv"
                     "COSTOS_PDF" -> ReportExporter.costosPdf(context, e, ReporteCostos.construir(datos), Fechas.etiquetaMes(mes)) to "application/pdf"
                     "COSTOS_CSV" -> ReportExporter.costosCsv(context, e, ReporteCostos.construir(datos), mes) to "text/csv"
-                    "XLSX_COMPLETA" -> ReportExporter.planillaXlsx(context, e, datos, mes) to PlanillaExcel.MIME
-                    "XLSX_PARAMETROS" -> ReportExporter.planillaXlsx(context, e, datos, mes, soloParametros = true) to PlanillaExcel.MIME
-                    else -> if (formato.startsWith("XLSX_BOLETA:")) {
-                        ReportExporter.planillaXlsx(context, e, datos, mes, soloUid = formato.substringAfter(":")) to PlanillaExcel.MIME
+                    else -> if (formato.startsWith("AVZ_")) {
+                        val tipo = formato.removePrefix("AVZ_").substringBefore(":")
+                        ReportExporter.planillaAvanzadaPdf(context, e, datos, mes, tipo, formato.substringAfter(":", "").ifBlank { null }) to "application/pdf"
                     } else {
                         require(e.ruc.length == 11) { "registra primero el RUC de la empresa en Reportes → Datos del empleador" }
                         ReportExporter.plameJor(context, datos, mes, e.ruc) to "text/plain"
