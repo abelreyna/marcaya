@@ -143,17 +143,13 @@ fun PerfilScreen(alVolver: () -> Unit, vm: PerfilViewModel = hiltViewModel()) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Foto con insignia de cámara para cambiarla
-                Box(Modifier.padding(top = 8.dp)) {
+                // Foto de perfil (tocarla también permite cambiarla); los botones Cámara / Galería van debajo
+                Box(Modifier.padding(top = 8.dp), contentAlignment = Alignment.Center) {
                     Avatar(u.nombre, 128.dp, foto = u.foto, alTocar = { if (!ui.procesandoFoto) elegirOrigen = true })
-                    Box(
-                        Modifier.align(Alignment.BottomEnd).size(40.dp).clip(CircleShape).background(Teal)
-                            .border(3.dp, Color.White, CircleShape).clickable(enabled = !ui.procesandoFoto, onClick = ::abrirCamara),
+                    if (ui.procesandoFoto) Box(
+                        Modifier.size(128.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)),
                         contentAlignment = Alignment.Center
-                    ) {
-                        if (ui.procesandoFoto) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                        else Icon(Icons.Default.PhotoCamera, "Tomar foto", tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
+                    ) { CircularProgressIndicator(Modifier.size(32.dp), color = Color.White, strokeWidth = 3.dp) }
                 }
                 Text(u.nombre.ifBlank { "Sin nombre" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = AzulMarino)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

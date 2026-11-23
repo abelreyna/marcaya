@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -232,7 +233,7 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
         if (porJustificar > 0) AvisoIncidencias(porJustificar, alJustificar)
         // Recuadro "Selfie de Validación"
         Box(
-            Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(20.dp)).background(AzulMarino),
+            Modifier.fillMaxWidth().heightIn(min = 170.dp).clip(RoundedCornerShape(20.dp)).background(AzulMarino).padding(vertical = 14.dp, horizontal = 16.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -244,7 +245,7 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
                 ) { Icon(Icons.Default.Face, null, tint = Color(0xFF8FD3D0), modifier = Modifier.size(64.dp)) }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Se activa al iniciar el turno de la mañana (Ingreso) y de la tarde (Fin Descanso) · la imagen no se guarda",
+                    "Al ingresar y al volver del descanso\nLa foto no se guarda",
                     color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center
                 )
             }
