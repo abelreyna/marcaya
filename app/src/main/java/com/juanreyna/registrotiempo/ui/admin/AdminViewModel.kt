@@ -1,5 +1,11 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import com.juanreyna.registrotiempo.util.AvisosIncidencias
+import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
+import com.juanreyna.registrotiempo.domain.model.EstadoIncidencia
+import com.juanreyna.registrotiempo.domain.model.Incidencia
+import com.juanreyna.registrotiempo.domain.calc.DetectorIncidencias
+import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -49,7 +55,8 @@ data class UiAdmin(
     val colaboradores: List<Usuario> = emptyList(),
     val filas: List<FilaMonitoreo> = emptyList(),
     val alertas: List<Alerta> = emptyList(),
-    val justificaciones: List<Justificacion> = emptyList()
+    val justificaciones: List<Justificacion> = emptyList(),
+    val marcajesHoy: List<Marcaje> = emptyList()
 ) {
     val horasHoy get() = filas.sumOf { it.horasHoy }
     val costoHoy get() = filas.sumOf { it.costoHoy }
@@ -59,7 +66,8 @@ data class UiAdmin(
 @HiltViewModel
 class AdminViewModel @Inject constructor(
     savedState: SavedStateHandle,
-    private val repo: FirestoreRepository
+    private val repo: FirestoreRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     val adminId: String = checkNotNull(savedState["uid"])
@@ -78,7 +86,7 @@ class AdminViewModel @Inject constructor(
         repo.observarAlertasHoy(adminId),
         repo.observarJustificaciones("adminId", adminId)
     ) { e, cols, hoy, alertas, justif ->
-        Triple(UiAdmin(e, cols, emptyList(), alertas, justif), hoy, cols)
+        Triple(UiAdmin(e, cols, emptyList(), alertas, justif, hoy), hoy, cols)
     }.combine(reloj) { (base, hoy, cols), ahora ->
         val porColab = hoy.groupBy { it.colaboradorId }
         base.copy(filas = cols.map { u ->
@@ -91,6 +99,46 @@ class AdminViewModel @Inject constructor(
             FilaMonitoreo(u, JornadaCalculator.estado(ms, u.horario), ms.lastOrNull(), horas, costoHoy)
         })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiAdmin())
+
+    /** Marcajes del mes en curso de toda la empresa (para detectar faltas, tardanzas, etc.). */
+    private val marcajesMesActual = MutableStateFlow<List<Marcaje>?>(null)
+
+    /** Incidencias del mes de todo el equipo, con el estado de su justificación. */
+    val incidencias: StateFlow<List<Incidencia>?> = combine(marcajesMesActual, ui) { ms, u ->
+        if (ms == null || u.empresa == null) null
+        else {
+            // Los marcajes de hoy llegan en vivo; los del resto del mes se cargan al abrir
+            val hoy = Fechas.hoy()
+            val todos = ms.filter { it.fecha != hoy } + u.marcajesHoy
+            u.colaboradores.flatMap { c -> DetectorIncidencias.detectar(c, todos, u.justificaciones, Fechas.mesActual(), System.currentTimeMillis()) }
+                .sortedWith(compareByDescending<Incidencia> { it.fecha }.thenBy { it.colaboradorNombre })
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun cargarIncidencias() = viewModelScope.launch {
+        runCatching { repo.marcajesEmpresaMes(adminId, Fechas.mesActual()) }
+            .onSuccess { marcajesMesActual.value = it }
+            .onFailure { mensaje.value = "No se pudieron cargar las incidencias: ${it.message}"; marcajesMesActual.value = emptyList() }
+    }
+
+    init {
+        cargarIncidencias()
+        // Notificación del sistema por cada alerta, incidencia o justificación nueva del equipo
+        viewModelScope.launch {
+            combine(ui, incidencias) { u, inc -> u to inc.orEmpty() }.collect { (u, inc) ->
+                if (u.empresa == null) return@collect
+                val avisos = buildList {
+                    u.alertas.forEach { add(AvisosIncidencias.Aviso("alerta|${it.id}", tituloAlerta(it.tipo), "${it.colaboradorNombre}: ${it.detalle}")) }
+                    inc.filter { it.estado == EstadoIncidencia.POR_JUSTIFICAR && it.tipo in AVISAR }
+                        .forEach { add(AvisosIncidencias.Aviso(it.clave, "${it.titulo} · ${it.colaboradorNombre}", "${it.fecha} · ${it.detalle}")) }
+                    u.justificaciones.filter { it.estado == EstadoJustificacion.PENDIENTE }
+                        .forEach { add(AvisosIncidencias.Aviso("just|${it.id}", "Nueva justificación por revisar", "${it.colaboradorNombre} · ${it.incidencia?.etiqueta ?: it.motivo.etiqueta} (${it.fecha})")) }
+                    sinIngresoHoy(u).forEach { add(AvisosIncidencias.Aviso("sining|${it.uid}|${Fechas.hoy()}", "${it.nombre} aún no marca ingreso", "Entrada programada a las ${it.horario.entrada}")) }
+                }
+                AvisosIncidencias.notificarNuevos(context, adminId, avisos)
+            }
+        }
+    }
 
     fun guardarGeocerca(g: Geocerca) = ejecutar("Geocerca guardada") { repo.guardarGeocerca(adminId, g) }
 
@@ -125,7 +173,7 @@ class AdminViewModel @Inject constructor(
     }
 
     fun resolver(j: Justificacion, estado: EstadoJustificacion) =
-        ejecutar("Justificación ${if (estado == EstadoJustificacion.APROBADA) "aprobada" else "rechazada"}") {
+        ejecutar("Justificación ${if (estado == EstadoJustificacion.APROBADA) "aprobada" else "no autorizada"}") {
             repo.resolverJustificacion(j.id, estado)
         }
 
@@ -162,4 +210,24 @@ class AdminViewModel @Inject constructor(
     }
 
     fun consumirMensaje() { mensaje.value = null }
+}
+
+/** Incidencias que generan notificación al empleador. */
+private val AVISAR = setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO, TipoIncidencia.SIN_SALIDA)
+
+fun tituloAlerta(tipo: String): String = when (tipo) {
+    "GPS_FALSO" -> "¡Ubicación simulada!"
+    "FUERA_RANGO" -> "Marcaje fuera de la zona"
+    else -> TipoIncidencia.entries.firstOrNull { it.name == tipo }?.etiqueta ?: "Alerta"
+}
+
+/** Colaboradores que hoy deben trabajar, ya pasó su hora de entrada + tolerancia y no marcaron ingreso. */
+fun sinIngresoHoy(u: UiAdmin, ahora: Long = System.currentTimeMillis()): List<Usuario> {
+    val minuto = Fechas.minutosDelDia(ahora)
+    val dia = Fechas.diaSemanaIso(Fechas.hoy())
+    return u.filas.filter { f ->
+        val h = f.usuario.horario
+        f.usuario.activo && f.estado == EstadoColaborador.SIN_MARCAR && h.trabajaEl(dia) &&
+            minuto > Horario.minutos(h.entrada) + h.toleranciaMin
+    }.map { it.usuario }
 }

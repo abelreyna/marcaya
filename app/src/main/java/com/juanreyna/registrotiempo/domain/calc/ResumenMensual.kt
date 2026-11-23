@@ -16,6 +16,7 @@ data class DiaTrabajado(
     val minutosTarde: Long = 0,
     val minutosExcesoDescanso: Long = 0,
     val minutosExtra: Long = 0,
+    val minutosSalidaAnticipada: Long = 0,
     val fueraRango: Boolean,
     val validacionFacial: Boolean
 ) {
@@ -53,6 +54,7 @@ object ResumenMensual {
                 minutosTarde = inc.minutosTarde,
                 minutosExcesoDescanso = inc.minutosExcesoDescanso,
                 minutosExtra = inc.minutosExtra,
+                minutosSalidaAnticipada = inc.minutosSalidaAnticipada,
                 fueraRango = delDia.any { !it.dentroGeocerca },
                 validacionFacial = delDia.filter { it.tipo.requiereRostro }.all { it.validacionFacial }
             )

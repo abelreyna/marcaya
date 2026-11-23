@@ -21,7 +21,8 @@ data class ResumenJornada(
 data class IncidenciasDia(
     val minutosTarde: Long = 0,
     val minutosExcesoDescanso: Long = 0,
-    val minutosExtra: Long = 0
+    val minutosExtra: Long = 0,
+    val minutosSalidaAnticipada: Long = 0
 ) {
     val tardanza get() = minutosTarde > 0
 }
@@ -133,7 +134,11 @@ object JornadaCalculator {
         val extra = fin?.let { (rel(it) - salidaProg).toLong() } ?: 0L
         val minutosExtra = if (extra > tol) extra.coerceAtMost(resumen.minutosEfectivos) else 0L
 
-        return IncidenciasDia(minutosTarde, minutosExceso, minutosExtra)
+        val salidaReal = ordenados.lastOrNull { it.tipo == TipoMarcaje.SALIDA }?.timestampMillis
+        val antes = salidaReal?.let { (salidaProg - rel(it)).toLong() } ?: 0L
+        val minutosAnticipada = if (antes > tol) antes else 0L
+
+        return IncidenciasDia(minutosTarde, minutosExceso, minutosExtra, minutosAnticipada)
     }
 
     /** Horas extra del día: todo lo que excede la jornada base diaria (8 h). */

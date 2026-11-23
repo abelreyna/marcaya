@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import com.juanreyna.registrotiempo.ui.components.AvisoIncidencias
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -183,7 +184,7 @@ fun ColaboradorScreen(
             infoVip.mensaje?.let { BannerVip(it, alVerVip, if (infoVip.cerrable) alCerrarBanner else null) }
             if (ui.usuario == null || ui.empresa == null) { Cargando(); return@MarcoPantalla }
             when (pestana) {
-                0 -> PestanaMarcaje(vm, ui, infoVip.bloqueado) { verificando = it }
+                0 -> PestanaMarcaje(vm, ui, infoVip.bloqueado, alJustificar = { pestana = 2 }) { verificando = it }
                 1 -> PestanaHistorial(vm, ui)
                 else -> PestanaJustificar(vm, ui)
             }
@@ -193,7 +194,9 @@ fun ColaboradorScreen(
 }
 
 @Composable
-private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloqueado: Boolean, pedirRostro: (TipoMarcaje) -> Unit) {
+private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloqueado: Boolean, alJustificar: () -> Unit, pedirRostro: (TipoMarcaje) -> Unit) {
+    val incidencias by vm.incidencias.collectAsStateWithLifecycle()
+    val porJustificar = incidencias.count { it.estado == com.juanreyna.registrotiempo.domain.model.EstadoIncidencia.POR_JUSTIFICAR }
     val ubic by vm.ultimaUbicacion.collectAsStateWithLifecycle()
     val procesando by vm.procesando.collectAsStateWithLifecycle()
     var tipoPendiente by remember { mutableStateOf<TipoMarcaje?>(null) }
@@ -220,6 +223,7 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
     val pagoHoy = resumenHoy.horasEfectivas * valorHora
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (porJustificar > 0) AvisoIncidencias(porJustificar, alJustificar)
         // Recuadro "Selfie de Validación"
         Box(
             Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(20.dp)).background(AzulMarino),
@@ -405,79 +409,4 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PestanaJustificar(vm: ColaboradorViewModel, ui: UiColaborador) {
-    var motivo by rememberSaveable { mutableStateOf(MotivoJustificacion.COMISION_SERVICIOS) }
-    var detalle by rememberSaveable { mutableStateOf("") }
-    var fecha by rememberSaveable { mutableStateOf(Fechas.hoy()) }
-    var abierto by remember { mutableStateOf(false) }
-    val incidencia = ui.resumenMes?.dias?.lastOrNull { it.fueraRango || it.tardanza }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            Text(
-                "Justifica una falta, tardanza o un marcaje fuera de la geocerca.",
-                Modifier.padding(top = 16.dp), style = MaterialTheme.typography.bodyMedium, color = TextoSecundario
-            )
-        }
-        if (incidencia != null) item {
-            Seccion(borde = Rojo.copy(alpha = 0.3f), fondo = RojoTinte) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.ErrorOutline, null, tint = Rojo)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("Tarjeta de la incidencia", style = MaterialTheme.typography.labelMedium, color = TextoSecundario)
-                        Text(
-                            (if (incidencia.fueraRango) "Marcaje fuera de geocerca" else "Tardanza en ingreso") + " el ${incidencia.fecha}",
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-        }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Motivo", fontWeight = FontWeight.SemiBold)
-                ExposedDropdownMenuBox(expanded = abierto, onExpandedChange = { abierto = it }) {
-                    OutlinedTextField(
-                        motivo.etiqueta, {}, readOnly = true, shape = FormaCampo, colors = coloresCampo(),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(abierto) },
-                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                    )
-                    DropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
-                        MotivoJustificacion.entries.forEach {
-                            DropdownMenuItem(text = { Text(it.etiqueta) }, onClick = { motivo = it; abierto = false })
-                        }
-                    }
-                }
-                OutlinedTextField(fecha, { fecha = it }, label = { Text("Fecha (AAAA-MM-DD)") }, shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth())
-                Text("Detalla tu justificación", fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(detalle, { detalle = it.take(500) }, placeholder = { Text("Describe lo ocurrido") }, minLines = 3, shape = FormaCampo, colors = coloresCampo(), modifier = Modifier.fillMaxWidth())
-                BotonPill(
-                    "Enviar Justificación",
-                    { vm.enviarJustificacion(motivo, detalle.trim(), fecha.trim()); detalle = "" },
-                    enabled = detalle.isNotBlank() && fecha.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))
-                )
-            }
-        }
-        if (ui.justificaciones.isNotEmpty()) item { TituloSeccion("Mis justificaciones") }
-        items(ui.justificaciones) { j ->
-            Seccion(borde = Borde) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(j.motivo.etiqueta, fontWeight = FontWeight.SemiBold)
-                        Text(j.fecha, style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-                    }
-                    when (j.estado) {
-                        EstadoJustificacion.PENDIENTE -> ChipSimple("Pendiente", Ambar)
-                        EstadoJustificacion.APROBADA -> ChipSimple("Aprobada", VerdeEsmeralda)
-                        EstadoJustificacion.RECHAZADA -> ChipSimple("Rechazada", Rojo)
-                    }
-                }
-                Text(j.detalle, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        item { Spacer(Modifier.height(16.dp)) }
-    }
-}
 

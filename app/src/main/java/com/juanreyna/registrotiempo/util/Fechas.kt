@@ -18,6 +18,21 @@ object Fechas {
     /** "2026-11-22" + "17:30" → milisegundos en hora de Lima. */
     fun millisDe(fecha: String, hhmm: String): Long = fmt("yyyy-MM-dd HH:mm").parse("$fecha $hhmm")!!.time
     fun hhmm(millis: Long): String = fmt("HH:mm").format(Date(millis))
+    fun hhmmOpt(millis: Long?): String = millis?.let { hhmm(it) } ?: "--:--"
+    fun fechaDe(millis: Long): String = fmt("yyyy-MM-dd").format(Date(millis))
+
+    /** Día de la semana ISO (1 = lunes … 7 = domingo) de "AAAA-MM-DD". */
+    fun diaSemanaIso(fecha: String): Int {
+        val c = Calendar.getInstance(zonaLima).apply { time = fmt("yyyy-MM-dd").parse(fecha)!! }
+        return (c.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
+    }
+
+    /** Todas las fechas "AAAA-MM-DD" del mes "AAAA-MM". */
+    fun diasDelMes(mes: String): List<String> = runCatching {
+        val c = Calendar.getInstance(zonaLima).apply { time = fmt("yyyy-MM").parse(mes)!! }
+        val n = c.getActualMaximum(Calendar.DAY_OF_MONTH)
+        (1..n).map { "$mes-%02d".format(it) }
+    }.getOrDefault(emptyList())
     fun mesActual(): String = fmt("yyyy-MM").format(Date())
     fun hora(millis: Long?): String = millis?.let { fmt("HH:mm:ss").format(Date(it)) } ?: "--:--"
     fun fechaLarga(millis: Long): String = fmt("EEEE d 'de' MMMM, yyyy").format(Date(millis))

@@ -13,6 +13,7 @@ import com.juanreyna.registrotiempo.domain.model.Justificacion
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.ModoPago
 import com.juanreyna.registrotiempo.domain.model.MotivoJustificacion
+import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
 import com.juanreyna.registrotiempo.domain.model.Rol
 import com.juanreyna.registrotiempo.domain.model.TipoMarcaje
 import com.juanreyna.registrotiempo.domain.model.Usuario
@@ -266,7 +267,7 @@ class FirestoreRepository @Inject constructor() {
     }
 
     // ---------- Justificaciones ----------
-    suspend fun enviarJustificacion(usuario: Usuario, motivo: MotivoJustificacion, detalle: String, fecha: String) {
+    suspend fun enviarJustificacion(usuario: Usuario, motivo: MotivoJustificacion, detalle: String, fecha: String, incidencia: TipoIncidencia?) {
         justificaciones.add(
             mapOf(
                 "colaboradorId" to usuario.uid,
@@ -276,10 +277,15 @@ class FirestoreRepository @Inject constructor() {
                 "detalle" to detalle,
                 "fecha" to fecha,
                 "estado" to EstadoJustificacion.PENDIENTE.name,
+                "incidencia" to incidencia?.name,
                 "creado" to FieldValue.serverTimestamp()
             )
         ).await()
     }
+
+    /** Marcajes de un colaborador en un mes (para detectar incidencias). */
+    suspend fun marcajesColaboradorMes(uid: String, mes: String): List<Marcaje> =
+        marcajes.whereEqualTo("colaboradorId", uid).whereEqualTo("mes", mes).get().await().documents.map { it.aMarcaje() }
 
     fun observarJustificaciones(campo: String, valor: String): Flow<List<Justificacion>> = callbackFlow {
         val reg = justificaciones.whereEqualTo(campo, valor)

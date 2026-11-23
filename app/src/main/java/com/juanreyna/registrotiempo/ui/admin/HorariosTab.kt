@@ -53,7 +53,14 @@ import com.juanreyna.registrotiempo.ui.theme.TextoSecundario
 import com.juanreyna.registrotiempo.util.Fechas
 
 /** Texto corto de un horario: "08:00–17:00 · desc. 13:00–14:00 · tol. 5 min". */
-internal fun Horario.resumen() = "$entrada–$salida · desc. $inicioDescanso–$finDescanso · tol. $toleranciaMin min"
+internal fun Horario.resumen() = "$entrada–$salida · desc. $inicioDescanso–$finDescanso · tol. $toleranciaMin min · ${diasTexto()}"
+
+/** "Lun–Sáb", "Lun–Vie" o lista de días. */
+internal fun Horario.diasTexto(): String {
+    val n = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+    val d = diasLaborables.sorted()
+    return if (d.size > 2 && d.zipWithNext().all { (a, b) -> b == a + 1 }) "${n[d.first() - 1]}–${n[d.last() - 1]}" else d.joinToString(", ") { n[it - 1] }
+}
 
 /**
  * Pestaña "Horarios": el administrador define un horario y elige qué colaboradores lo usan
@@ -92,6 +99,24 @@ internal fun PestanaHorarios(vm: AdminViewModel, ui: UiAdmin) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { horario = horario.copy(inicioDescanso = it) }
                     CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { horario = horario.copy(finDescanso = it) }
+                }
+                Text("Días laborables", style = MaterialTheme.typography.labelLarge, color = TextoSecundario)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    listOf("L", "M", "M", "J", "V", "S", "D").forEachIndexed { idx, letra ->
+                        val dia = idx + 1
+                        val activo = dia in horario.diasLaborables
+                        androidx.compose.material3.FilterChip(
+                            selected = activo,
+                            onClick = {
+                                val nuevos = if (activo) horario.diasLaborables - dia else (horario.diasLaborables + dia).sorted()
+                                if (nuevos.isNotEmpty()) horario = horario.copy(diasLaborables = nuevos)
+                            },
+                            label = { Text(letra) },
+                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = com.juanreyna.registrotiempo.ui.theme.Teal, selectedLabelColor = androidx.compose.ui.graphics.Color.White
+                            )
+                        )
+                    }
                 }
                 OutlinedTextField(
                     tolerancia, { tolerancia = it.filter(Char::isDigit).take(2) }, Modifier.fillMaxWidth(),

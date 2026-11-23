@@ -185,6 +185,7 @@ fun AdminScreen(
     vm: AdminViewModel = hiltViewModel()
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val incidencias by vm.incidencias.collectAsStateWithLifecycle()
     val admin by vm.admin.collectAsStateWithLifecycle()
     val mensaje by vm.mensaje.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -203,7 +204,7 @@ fun AdminScreen(
             alTocarAvatar = alPerfil,
             acciones = {
                 IconButton(onClick = { verNotificaciones = true }) {
-                    androidx.compose.material3.BadgedBox(badge = { if (ui.alertas.isNotEmpty()) androidx.compose.material3.Badge { Text("${ui.alertas.size}") } }) {
+                    androidx.compose.material3.BadgedBox(badge = { val n = ui.alertas.size + ui.pendientes + sinIngresoHoy(ui).size; if (n > 0) androidx.compose.material3.Badge { Text("$n") } }) {
                         Icon(Icons.Default.Notifications, "Notificaciones", tint = Color.White)
                     }
                 }
@@ -221,7 +222,7 @@ fun AdminScreen(
                             Triple("Horarios", Icons.Default.Schedule, 5),
                             Triple("Zonas", Icons.Default.Map, 2), Triple("Incid.", Icons.Default.Rule, 3),
                             Triple("Reportes", Icons.Default.Assessment, 4)
-                        ), pestana, { pestana = it }, insignia = { if (it == 3) ui.pendientes else 0 }
+                        ), pestana, { pestana = it }, insignia = { if (it == 3) ui.pendientes + (incidencias?.count { i -> i.estado == com.juanreyna.registrotiempo.domain.model.EstadoIncidencia.POR_JUSTIFICAR } ?: 0) else 0 }
                     )
                 }
             }
@@ -240,27 +241,34 @@ fun AdminScreen(
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))
     }
-    if (verNotificaciones) CentroNotificaciones(ui) { verNotificaciones = false }
+    if (verNotificaciones) CentroNotificaciones(ui, incidencias.orEmpty(), alVerIncidencias = { verNotificaciones = false; pestana = 3 }) { verNotificaciones = false }
 }
 
-/** Centro de Notificaciones (alertas de ubicación, tardanzas y justificaciones). */
+/** Centro de Notificaciones: alertas en vivo, faltas, tardanzas e incidencias sin justificar. */
 @Composable
-private fun CentroNotificaciones(ui: UiAdmin, alCerrar: () -> Unit) {
+private fun CentroNotificaciones(ui: UiAdmin, incidencias: List<com.juanreyna.registrotiempo.domain.model.Incidencia>, alVerIncidencias: () -> Unit, alCerrar: () -> Unit) {
+    val sinIngreso = sinIngresoHoy(ui)
+    val sinJustificar = incidencias.filter { it.estado == com.juanreyna.registrotiempo.domain.model.EstadoIncidencia.POR_JUSTIFICAR }
     AlertDialog(
         onDismissRequest = alCerrar,
         title = { Text("Centro de Notificaciones", fontWeight = FontWeight.Bold, color = AzulMarino) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ui.alertas.forEach {
-                    TarjetaAviso(Icons.Default.Warning, if (it.tipo == "GPS_FALSO") "¡Ubicación simulada!" else "¡Alerta de Ubicación!",
-                        "${Fechas.horaCorta(it.creadoMillis)} · ${it.colaboradorNombre}: ${it.detalle}", Rojo, RojoTinte)
+                    val grave = it.tipo == "GPS_FALSO" || it.tipo == "FUERA_RANGO"
+                    TarjetaAviso(if (grave) Icons.Default.Warning else Icons.Default.Notifications, tituloAlerta(it.tipo),
+                        "${Fechas.horaCorta(it.creadoMillis)} · ${it.colaboradorNombre}: ${it.detalle}", if (grave) Rojo else Ambar, if (grave) RojoTinte else Color.White)
                 }
-                ui.filas.filter { it.estado == EstadoColaborador.TARDANZA }.forEach {
-                    TarjetaAviso(Icons.Default.Notifications, "Faltas o tardanzas",
-                        "${it.usuario.nombre} ingresó a las ${Fechas.horaCorta(it.ultimo?.timestampMillis)} (tolerancia superada)", Ambar)
+                sinIngreso.forEach {
+                    TarjetaAviso(Icons.Default.Notifications, "Aún no marca ingreso", "${it.nombre} · entrada programada ${it.horario.entrada}", Ambar)
                 }
-                if (ui.pendientes > 0) TarjetaAviso(Icons.Default.CheckBox, "Justificaciones pendientes", "${ui.pendientes} por revisar en Incidencias")
-                if (ui.alertas.isEmpty() && ui.pendientes == 0 && ui.filas.none { it.estado == EstadoColaborador.TARDANZA })
+                if (sinJustificar.isNotEmpty()) TarjetaAviso(
+                    Icons.Default.Warning, "Incidencias sin justificar",
+                    sinJustificar.groupingBy { it.tipo.etiqueta }.eachCount().entries.joinToString(" · ") { "${it.value} ${it.key.lowercase()}" }, Rojo, RojoTinte
+                )
+                if (ui.pendientes > 0) TarjetaAviso(Icons.Default.CheckBox, "Justificaciones por revisar", "${ui.pendientes} pendiente(s) en Incidencias")
+                if (sinJustificar.isNotEmpty() || ui.pendientes > 0) TextButton(onClick = alVerIncidencias) { Text("Ver incidencias") }
+                if (ui.alertas.isEmpty() && ui.pendientes == 0 && sinIngreso.isEmpty() && sinJustificar.isEmpty())
                     Text("Sin notificaciones por ahora.", color = TextoSecundario)
             }
         },
@@ -376,7 +384,7 @@ private fun IconCuadrado(icono: ImageVector, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Contador(titulo: String, valor: Int, fondo: Color, color: Color, modifier: Modifier) {
+internal fun Contador(titulo: String, valor: Int, fondo: Color, color: Color, modifier: Modifier) {
     Column(
         modifier.clip(RoundedCornerShape(16.dp)).background(fondo).padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -766,38 +774,6 @@ private fun PestanaGeocerca(actual: Geocerca, alGuardar: (Geocerca) -> Unit) {
     }
 }
 
-@Composable
-private fun PestanaIncidencias(vm: AdminViewModel, ui: UiAdmin) {
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Revisa y aprueba las justificaciones enviadas por tu equipo.", Modifier.padding(top = 16.dp), color = TextoSecundario) }
-        items(ui.justificaciones, key = { it.id }) { j ->
-            Seccion(borde = Borde) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(j.colaboradorNombre, 40.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(j.colaboradorNombre, fontWeight = FontWeight.SemiBold)
-                        Text(j.fecha, style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-                    }
-                    when (j.estado) {
-                        EstadoJustificacion.PENDIENTE -> ChipSimple("Pendiente", Ambar)
-                        EstadoJustificacion.APROBADA -> ChipSimple("Aprobada", VerdeEsmeralda)
-                        EstadoJustificacion.RECHAZADA -> ChipSimple("Rechazada", Rojo)
-                    }
-                }
-                Text(j.motivo.etiqueta, fontWeight = FontWeight.SemiBold, color = AzulMarino)
-                Text(j.detalle, style = MaterialTheme.typography.bodyMedium)
-                if (j.estado == EstadoJustificacion.PENDIENTE) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BotonPill("Aprobar", { vm.resolver(j, EstadoJustificacion.APROBADA) }, Modifier.weight(1f), alto = 44.dp)
-                        BotonPillContorno("Rechazar", { vm.resolver(j, EstadoJustificacion.RECHAZADA) }, Modifier.weight(1f), color = Rojo)
-                    }
-                }
-            }
-        }
-        if (ui.justificaciones.isEmpty()) item { TextoCentrado("No hay justificaciones registradas.") }
-    }
-}
 
 @Composable
 private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {

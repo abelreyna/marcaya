@@ -42,12 +42,46 @@ enum class EstadoColaborador(val etiqueta: String) {
 
 enum class EstadoJustificacion { PENDIENTE, APROBADA, RECHAZADA }
 
-enum class MotivoJustificacion(val etiqueta: String) {
-    COMISION_SERVICIOS("Comisión de servicios"),
-    CITA_MEDICA("Cita médica"),
-    TRABAJO_CAMPO("Trabajo de campo"),
-    PROBLEMA_TECNICO("Problemas técnicos"),
-    OTRO("Otro")
+/** Tipos de incidencia de asistencia detectados automáticamente a partir del horario. */
+enum class TipoIncidencia(val etiqueta: String) {
+    FALTA("Falta (inasistencia)"),
+    TARDANZA("Tardanza en ingreso"),
+    SALIDA_ANTICIPADA("Salida anticipada"),
+    EXCESO_DESCANSO("Exceso de descanso"),
+    SIN_SALIDA("No marcó salida"),
+    FUERA_GEOCERCA("Marcaje fuera de la zona")
+}
+
+/** Estado de una incidencia según su justificación. */
+enum class EstadoIncidencia(val etiqueta: String) {
+    POR_JUSTIFICAR("Por justificar"),
+    EN_REVISION("En revisión"),
+    JUSTIFICADA("Justificada"),
+    NO_AUTORIZADA("No autorizada")
+}
+
+/** Motivos de justificación; [aplica] indica a qué incidencias corresponde (vacío = a todas). */
+enum class MotivoJustificacion(val etiqueta: String, val aplica: Set<TipoIncidencia> = emptySet()) {
+    DESCANSO_MEDICO("Enfermedad / descanso médico", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA)),
+    CITA_MEDICA("Cita médica", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO)),
+    EMERGENCIA_FAMILIAR("Emergencia familiar", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO)),
+    DUELO("Fallecimiento de familiar (duelo)", setOf(TipoIncidencia.FALTA, TipoIncidencia.SALIDA_ANTICIPADA)),
+    TRANSPORTE("Problemas de transporte / tránsito", setOf(TipoIncidencia.TARDANZA, TipoIncidencia.EXCESO_DESCANSO)),
+    PERMISO_AUTORIZADO("Permiso autorizado por el jefe", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.EXCESO_DESCANSO)),
+    VACACIONES("Vacaciones", setOf(TipoIncidencia.FALTA)),
+    LICENCIA("Licencia (maternidad, paternidad u otra)", setOf(TipoIncidencia.FALTA)),
+    TRAMITE("Trámite personal / judicial", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA)),
+    COMISION_SERVICIOS("Comisión de servicios", setOf(TipoIncidencia.FALTA, TipoIncidencia.FUERA_GEOCERCA, TipoIncidencia.SALIDA_ANTICIPADA, TipoIncidencia.TARDANZA)),
+    TRABAJO_CAMPO("Trabajo de campo", setOf(TipoIncidencia.FUERA_GEOCERCA, TipoIncidencia.FALTA, TipoIncidencia.SIN_SALIDA)),
+    CAPACITACION("Capacitación / curso", setOf(TipoIncidencia.FALTA, TipoIncidencia.TARDANZA, TipoIncidencia.SALIDA_ANTICIPADA)),
+    OLVIDO_MARCAJE("Olvidé marcar", setOf(TipoIncidencia.SIN_SALIDA)),
+    PROBLEMA_TECNICO("Problemas técnicos (app / GPS / celular)"),
+    OTRO("Otro");
+
+    companion object {
+        fun para(tipo: TipoIncidencia?): List<MotivoJustificacion> =
+            if (tipo == null) entries else entries.filter { it.aplica.isEmpty() || tipo in it.aplica }
+    }
 }
 
 /** Configuración de pago individual del colaborador. */
@@ -75,8 +109,12 @@ data class Horario(
     val inicioDescanso: String = "13:00",
     val finDescanso: String = "14:00",
     val salida: String = "17:00",
-    val toleranciaMin: Int = 5
+    val toleranciaMin: Int = 5,
+    /** Días laborables (ISO: 1 = lunes … 7 = domingo). Por defecto lunes a sábado. */
+    val diasLaborables: List<Int> = listOf(1, 2, 3, 4, 5, 6)
 ) {
+    fun trabajaEl(diaIso: Int) = diaIso in diasLaborables
+
     val minutosDescansoProgramado: Int get() = diferencia(inicioDescanso, finDescanso)
     val minutosJornadaProgramada: Int get() = diferencia(entrada, salida) - minutosDescansoProgramado
 
@@ -104,7 +142,9 @@ data class Usuario(
     val horario: Horario = Horario(),
     val configPago: ConfigPago = ConfigPago(),
     /** Foto de perfil como JPEG 320×320 en Base64 (vacía = iniciales). Se guarda en Firestore: sin Firebase Storage. */
-    val foto: String = ""
+    val foto: String = "",
+    /** Fecha de registro: las faltas se cuentan desde ese día. */
+    val creadoMillis: Long? = null
 )
 
 data class Geocerca(
@@ -160,5 +200,28 @@ data class Justificacion(
     val detalle: String = "",
     val fecha: String = "",
     val estado: EstadoJustificacion = EstadoJustificacion.PENDIENTE,
-    val creadoMillis: Long? = null
+    val creadoMillis: Long? = null,
+    /** Incidencia que justifica (null en justificaciones antiguas: cubren cualquier incidencia de esa fecha). */
+    val incidencia: TipoIncidencia? = null
 )
+
+/** Incidencia detectada en un día, con el estado de su justificación. */
+data class Incidencia(
+    val colaboradorId: String,
+    val colaboradorNombre: String,
+    val fecha: String,
+    val tipo: TipoIncidencia,
+    val minutos: Long,
+    val detalle: String,
+    val estado: EstadoIncidencia,
+    val justificacion: Justificacion?
+) {
+    val clave get() = "$colaboradorId|$fecha|${tipo.name}"
+    /** "Falta no autorizada", "Tardanza justificada", etc. */
+    val titulo get() = when {
+        tipo == TipoIncidencia.FALTA && estado == EstadoIncidencia.NO_AUTORIZADA -> "Falta no autorizada"
+        tipo == TipoIncidencia.FALTA && estado == EstadoIncidencia.JUSTIFICADA -> "Falta justificada"
+        tipo == TipoIncidencia.FALTA && estado == EstadoIncidencia.POR_JUSTIFICAR -> "Falta injustificada"
+        else -> tipo.etiqueta
+    }
+}

@@ -1,5 +1,13 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import com.juanreyna.registrotiempo.util.AvisosIncidencias
+import com.juanreyna.registrotiempo.domain.model.Horario
+import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
+import com.juanreyna.registrotiempo.domain.model.EstadoIncidencia
+import com.juanreyna.registrotiempo.domain.model.Incidencia
+import com.juanreyna.registrotiempo.domain.calc.DetectorIncidencias
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -46,7 +54,8 @@ data class UiColaborador(
 class ColaboradorViewModel @Inject constructor(
     savedState: SavedStateHandle,
     private val repo: FirestoreRepository,
-    private val ubicacion: LocationValidator
+    private val ubicacion: LocationValidator,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val uid: String = checkNotNull(savedState["uid"])
@@ -66,6 +75,28 @@ class ColaboradorViewModel @Inject constructor(
         UiColaborador(u, e, h, u?.let { ResumenMensual.construir(listOf(it), m, System.currentTimeMillis()).first() }, j)
     }.combine(reloj) { estado, t -> estado.copy(ahora = t) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiColaborador())
+
+    /** Incidencias del mes actual (tardanzas, faltas, etc.) con el estado de su justificación. */
+    private val mesActualMarcajes = repo.observarMarcajesColaborador(uid, "mes", Fechas.mesActual())
+    val incidencias: StateFlow<List<Incidencia>> = combine(usuario.filterNotNull(), mesActualMarcajes, justif, reloj) { u, ms, js, ahora ->
+        DetectorIncidencias.detectar(u, ms, js, Fechas.mesActual(), ahora)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        // Notificación del sistema por cada incidencia nueva o justificación resuelta
+        viewModelScope.launch {
+            incidencias.collect { lista ->
+                AvisosIncidencias.notificarNuevos(context, uid, lista.mapNotNull { i ->
+                    when (i.estado) {
+                        EstadoIncidencia.POR_JUSTIFICAR -> AvisosIncidencias.Aviso(i.clave, "Incidencia: ${i.titulo}", "${i.fecha} · ${i.detalle}. Envía tu justificación.")
+                        EstadoIncidencia.JUSTIFICADA -> AvisosIncidencias.Aviso(i.clave + "|OK", "Justificación aprobada", "${i.tipo.etiqueta} del ${i.fecha}")
+                        EstadoIncidencia.NO_AUTORIZADA -> AvisosIncidencias.Aviso(i.clave + "|NO", i.titulo, "Tu justificación del ${i.fecha} no fue autorizada")
+                        EstadoIncidencia.EN_REVISION -> null
+                    }
+                })
+            }
+        }
+    }
 
     fun siguientesPermitidos(): Set<TipoMarcaje> =
         JornadaCalculator.siguientesPermitidos(ui.value.marcajesHoy.lastOrNull()?.tipo)
@@ -102,7 +133,13 @@ class ColaboradorViewModel @Inject constructor(
                     if (!r.dentro) runCatching {
                         repo.registrarAlerta(u, "FUERA_RANGO", "${tipo.etiqueta} a ${r.distanciaMetros.toInt()} m del centro de ${e.geocerca.nombre}")
                     }
-                    mensaje.value = "${tipo.etiqueta} registrado" + if (!r.dentro) " (fuera de la geocerca: envía una justificación)" else ""
+                    val incidencia = incidenciaAlMarcar(u, tipo)
+                    incidencia?.let { (t, det) -> runCatching { repo.registrarAlerta(u, t.name, det) } }
+                    mensaje.value = "${tipo.etiqueta} registrado" + when {
+                        incidencia != null -> " · ${incidencia.first.etiqueta}: justifícala en la pestaña Justificar"
+                        !r.dentro -> " (fuera de la geocerca: envía una justificación)"
+                        else -> ""
+                    }
                 }
             }
         } catch (ex: Exception) {
@@ -112,9 +149,28 @@ class ColaboradorViewModel @Inject constructor(
         }
     }
 
-    fun enviarJustificacion(motivo: MotivoJustificacion, detalle: String, fecha: String) = viewModelScope.launch {
+    /** Tardanza, exceso de descanso o salida anticipada del marcaje que se acaba de registrar (hora aproximada local). */
+    private fun incidenciaAlMarcar(u: Usuario, tipo: TipoMarcaje): Pair<TipoIncidencia, String>? {
+        val h = u.horario
+        val tol = h.toleranciaMin
+        val ahora = System.currentTimeMillis()
+        val min = Fechas.minutosDelDia(ahora)
+        val hora = Fechas.hhmm(ahora)
+        return when (tipo) {
+            TipoMarcaje.INGRESO -> (min - Horario.minutos(h.entrada)).takeIf { it in (tol + 1)..(12 * 60) }
+                ?.let { TipoIncidencia.TARDANZA to "Ingresó a las $hora · $it min tarde (entrada ${h.entrada})" }
+            TipoMarcaje.FIN_DESCANSO -> ui.value.marcajesHoy.lastOrNull { it.tipo == TipoMarcaje.INICIO_DESCANSO }?.timestampMillis
+                ?.let { ((ahora - it) / 60_000 - h.minutosDescansoProgramado).toInt() }?.takeIf { it > tol }
+                ?.let { TipoIncidencia.EXCESO_DESCANSO to "Regresó del descanso a las $hora · $it min de exceso" }
+            TipoMarcaje.SALIDA -> (Horario.minutos(h.salida) - min).takeIf { it in (tol + 1)..(12 * 60) }
+                ?.let { TipoIncidencia.SALIDA_ANTICIPADA to "Salió a las $hora · $it min antes (salida ${h.salida})" }
+            else -> null
+        }
+    }
+
+    fun enviarJustificacion(motivo: MotivoJustificacion, detalle: String, fecha: String, incidencia: TipoIncidencia?) = viewModelScope.launch {
         val u = ui.value.usuario ?: return@launch
-        runCatching { repo.enviarJustificacion(u, motivo, detalle, fecha) }
+        runCatching { repo.enviarJustificacion(u, motivo, detalle, fecha, incidencia) }
             .onSuccess { mensaje.value = "Justificación enviada al Administrador" }
             .onFailure { mensaje.value = "No se pudo enviar: ${it.message}" }
     }

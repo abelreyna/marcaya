@@ -15,6 +15,7 @@ import com.juanreyna.registrotiempo.domain.model.MotivoJustificacion
 import com.juanreyna.registrotiempo.domain.model.RegimenLaboral
 import com.juanreyna.registrotiempo.domain.model.Rol
 import com.juanreyna.registrotiempo.domain.model.SistemaPension
+import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
 import com.juanreyna.registrotiempo.domain.model.TipoMarcaje
 import com.juanreyna.registrotiempo.domain.model.Usuario
 
@@ -39,7 +40,8 @@ fun ConfigPago.aMapa(): Map<String, Any> = mapOf(
 
 fun Horario.aMapa(): Map<String, Any> = mapOf(
     "entrada" to entrada, "inicioDescanso" to inicioDescanso,
-    "finDescanso" to finDescanso, "salida" to salida, "toleranciaMin" to toleranciaMin
+    "finDescanso" to finDescanso, "salida" to salida, "toleranciaMin" to toleranciaMin,
+    "diasLaborables" to diasLaborables
 )
 
 /** Lee el horario; los perfiles antiguos solo tenían "horaIngresoEsperada". */
@@ -53,7 +55,8 @@ private fun DocumentSnapshot.horarioDe(): Horario {
         inicioDescanso = m["inicioDescanso"] as? String ?: d.inicioDescanso,
         finDescanso = m["finDescanso"] as? String ?: d.finDescanso,
         salida = m["salida"] as? String ?: d.salida,
-        toleranciaMin = (m["toleranciaMin"] as? Number)?.toInt() ?: d.toleranciaMin
+        toleranciaMin = (m["toleranciaMin"] as? Number)?.toInt() ?: d.toleranciaMin,
+        diasLaborables = (m["diasLaborables"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }?.sorted() ?: d.diasLaborables
     )
 }
 
@@ -84,7 +87,8 @@ fun DocumentSnapshot.aUsuario() = Usuario(
     activo = getBoolean("activo") ?: true,
     horario = horarioDe(),
     configPago = configDe(get("configPago")),
-    foto = s("foto")
+    foto = s("foto"),
+    creadoMillis = getTimestamp("creado", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time
 )
 
 @Suppress("UNCHECKED_CAST")
@@ -138,5 +142,6 @@ fun DocumentSnapshot.aJustificacion() = Justificacion(
     detalle = s("detalle"),
     fecha = s("fecha"),
     estado = enumDe(get("estado"), EstadoJustificacion.PENDIENTE),
-    creadoMillis = getTimestamp("creado", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time
+    creadoMillis = getTimestamp("creado", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time,
+    incidencia = getString("incidencia")?.let { n -> TipoIncidencia.entries.firstOrNull { it.name == n } }
 )

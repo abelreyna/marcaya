@@ -1,10 +1,17 @@
 package com.juanreyna.registrotiempo
 
+import com.juanreyna.registrotiempo.domain.calc.DetectorIncidencias
 import com.juanreyna.registrotiempo.domain.calc.JornadaCalculator
 import com.juanreyna.registrotiempo.domain.calc.ParametrosLegales
 import com.juanreyna.registrotiempo.domain.calc.PlanillaPeruCalculator
 import com.juanreyna.registrotiempo.domain.calc.ResumenMensual
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
+import com.juanreyna.registrotiempo.domain.model.EstadoIncidencia
+import com.juanreyna.registrotiempo.domain.model.EstadoJustificacion
+import com.juanreyna.registrotiempo.domain.model.Justificacion
+import com.juanreyna.registrotiempo.domain.model.MotivoJustificacion
+import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
+import com.juanreyna.registrotiempo.domain.model.Usuario
 import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.ModoPago
@@ -103,5 +110,36 @@ class DomainTest {
         assertEquals(AccessStatus.TRIAL_ACTIVE, VipAccessManager.evaluateCompanyAccess("FREE", 0, 10 * dia, cfg))
         assertEquals(AccessStatus.EXPIRING_SOON, VipAccessManager.evaluateCompanyAccess("FREE", 0, 355 * dia, cfg))
         assertEquals(AccessStatus.BLOCKED_NEED_VIP, VipAccessManager.evaluateCompanyAccess("FREE", 0, 366 * dia, cfg))
+    }
+
+    @Test fun incidencias_faltasTardanzaYJustificaciones() {
+        val lima = java.util.TimeZone.getTimeZone("America/Lima")
+        fun t(dia: Int, h: Int, m: Int) = java.util.Calendar.getInstance(lima).apply {
+            set(2026, 10, dia, h, m, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        // Registrado el martes 17/11; horario 08:00–17:00 lunes a sábado; "ahora" = viernes 20/11 a las 23:00
+        val u = Usuario(uid = "c1", nombre = "Ana", creadoMillis = t(17, 0, 0))
+        fun mk(dia: Int, tipo: TipoMarcaje, h: Int, m: Int) =
+            Marcaje(colaboradorId = "c1", fecha = "2026-11-%02d".format(dia), mes = "2026-11", tipo = tipo, timestampMillis = t(dia, h, m), dentroGeocerca = true)
+        val ms = listOf(
+            mk(18, TipoMarcaje.INGRESO, 8, 20), mk(18, TipoMarcaje.SALIDA, 15, 0),   // tardanza y salida anticipada
+            mk(20, TipoMarcaje.INGRESO, 8, 0), mk(20, TipoMarcaje.INICIO_DESCANSO, 13, 0),
+            mk(20, TipoMarcaje.FIN_DESCANSO, 14, 0), mk(20, TipoMarcaje.SALIDA, 17, 0) // día puntual
+        )
+        val js = listOf(
+            // Justificación antigua (sin tipo): cubre todas las incidencias del 18
+            Justificacion(id = "j1", colaboradorId = "c1", fecha = "2026-11-18", motivo = MotivoJustificacion.CITA_MEDICA, estado = EstadoJustificacion.APROBADA),
+            Justificacion(id = "j2", colaboradorId = "c1", fecha = "2026-11-19", motivo = MotivoJustificacion.OTRO, estado = EstadoJustificacion.RECHAZADA, incidencia = TipoIncidencia.FALTA)
+        )
+        val inc = DetectorIncidencias.detectar(u, ms, js, "2026-11", t(20, 23, 0))
+        fun de(fecha: String, tipo: TipoIncidencia) = inc.single { it.fecha == fecha && it.tipo == tipo }
+
+        assertEquals(EstadoIncidencia.POR_JUSTIFICAR, de("2026-11-17", TipoIncidencia.FALTA).estado)
+        assertEquals(EstadoIncidencia.JUSTIFICADA, de("2026-11-18", TipoIncidencia.TARDANZA).estado)
+        assertEquals(20L, de("2026-11-18", TipoIncidencia.TARDANZA).minutos)
+        assertEquals(120L, de("2026-11-18", TipoIncidencia.SALIDA_ANTICIPADA).minutos)
+        assertEquals("Falta no autorizada", de("2026-11-19", TipoIncidencia.FALTA).titulo)
+        assertTrue(inc.none { it.fecha == "2026-11-20" || it.fecha == "2026-11-16" }) // puntual / antes del registro
+        assertEquals(4, inc.size)
     }
 }
