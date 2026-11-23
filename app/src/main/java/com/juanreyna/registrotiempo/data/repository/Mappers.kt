@@ -37,7 +37,10 @@ fun ConfigPago.aMapa(): Map<String, Any> = mapOf(
     "sistemaPension" to sistemaPension.name,
     "comisionMixta" to comisionMixta,
     "recargoExtra1" to recargoExtra1,
-    "recargoExtra2" to recargoExtra2
+    "recargoExtra2" to recargoExtra2,
+    "cargo" to cargo,
+    "cuspp" to cuspp,
+    "fechaIngreso" to fechaIngreso
 )
 
 fun Horario.aMapa(): Map<String, Any> = mapOf(
@@ -84,7 +87,10 @@ private fun configDe(mapa: Any?): ConfigPago {
         sistemaPension = enumDe(m["sistemaPension"], SistemaPension.ONP),
         comisionMixta = m["comisionMixta"] as? Boolean ?: false,
         recargoExtra1 = (m["recargoExtra1"] as? Number)?.toDouble() ?: 25.0,
-        recargoExtra2 = (m["recargoExtra2"] as? Number)?.toDouble() ?: 35.0
+        recargoExtra2 = (m["recargoExtra2"] as? Number)?.toDouble() ?: 35.0,
+        cargo = m["cargo"] as? String ?: "",
+        cuspp = m["cuspp"] as? String ?: "",
+        fechaIngreso = m["fechaIngreso"] as? String ?: ""
     )
 }
 
@@ -115,6 +121,8 @@ fun DocumentSnapshot.aEmpresa(): Empresa {
         fechaCreacionMillis = getTimestamp("fechaCreacion")?.toDate()?.time ?: System.currentTimeMillis(),
         moneda = enumDe(get("moneda"), Moneda.PEN),
         modoPagoGlobal = enumDe(get("modoPagoGlobal"), ModoPago.SIMPLE),
+        ruc = s("ruc"),
+        razonSocial = s("razonSocial"),
         geocerca = if (g == null) Geocerca() else Geocerca(
             nombre = g["nombre"] as? String ?: "Sede principal",
             latitud = (g["latitud"] as? Number)?.toDouble() ?: 0.0,

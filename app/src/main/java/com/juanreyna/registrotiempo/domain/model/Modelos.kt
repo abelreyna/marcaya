@@ -99,7 +99,11 @@ data class ConfigPago(
     val comisionMixta: Boolean = false,
     /** Modo Simple: recargo (%) de las 2 primeras horas extra del día y desde la tercera. */
     val recargoExtra1: Double = 25.0,
-    val recargoExtra2: Double = 35.0
+    val recargoExtra2: Double = 35.0,
+    /** Datos de la boleta (Modo Avanzado): cargo, código CUSPP de la AFP y fecha de ingreso "yyyy-MM-dd". */
+    val cargo: String = "",
+    val cuspp: String = "",
+    val fechaIngreso: String = ""
 )
 
 /** Horas de un día concreto de la semana. Sin descanso: inicio y fin de descanso iguales. */
@@ -187,7 +191,10 @@ data class Empresa(
     val fechaCreacionMillis: Long = 0L,
     val moneda: Moneda = Moneda.PEN,
     val modoPagoGlobal: ModoPago = ModoPago.SIMPLE,
-    val geocerca: Geocerca = Geocerca()
+    val geocerca: Geocerca = Geocerca(),
+    /** Datos del empleador exigidos en boletas y registros (DS 001-98-TR, DS 004-2006-TR). */
+    val ruc: String = "",
+    val razonSocial: String = ""
 )
 
 data class Marcaje(

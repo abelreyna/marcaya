@@ -1,5 +1,9 @@
 package com.juanreyna.registrotiempo.domain.calc
 
+import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
+import com.juanreyna.registrotiempo.domain.model.EstadoIncidencia
+import com.juanreyna.registrotiempo.domain.model.ModoPago
+import com.juanreyna.registrotiempo.domain.model.Justificacion
 import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.TipoMarcaje
@@ -60,20 +64,53 @@ object ResumenMensual {
             )
     }
 
+    /**
+     * @param mes "yyyy-MM" del reporte (define la RMV y la UIT aplicables).
+     * @param justificaciones para no descontar faltas ni tardanzas ya justificadas (Modo Avanzado).
+     */
     fun construir(
         colaboradores: List<Usuario>,
         marcajesMes: List<Marcaje>,
         ahoraMillis: Long,
-        parametros: ParametrosLegales = ParametrosLegales()
+        mes: String = marcajesMes.firstOrNull()?.mes?.ifBlank { null } ?: Fechas.mesActual(),
+        justificaciones: List<Justificacion> = emptyList(),
+        parametros: ParametrosLegales = ParametrosLegales.delMes(mes)
     ): List<ResumenColaborador> {
         val porColaborador = marcajesMes.groupBy { it.colaboradorId }
         return colaboradores.map { u ->
-            val dias = diasDe(porColaborador[u.uid].orEmpty(), ahoraMillis, u.horario)
+            val propios = porColaborador[u.uid].orEmpty()
+            val dias = diasDe(propios, ahoraMillis, u.horario)
+            val periodo = if (u.configPago.modo == ModoPago.AVANZADO) periodoDe(u, propios, justificaciones, mes, ahoraMillis) else PeriodoPlanilla()
             ResumenColaborador(
                 usuario = u,
                 dias = dias,
-                boleta = PlanillaPeruCalculator.calcularDias(u.configPago, dias.map { it.horas }, parametros)
+                boleta = PlanillaPeruCalculator.calcularDias(u.configPago, dias.map { it.horas }, parametros, periodo)
             )
         }
     }
+
+    /**
+     * Días computables desde la fecha de ingreso, faltas y minutos de tardanza no justificados del mes.
+     * Una falta o tardanza en revisión o aún sin justificar se descuenta en la proyección; si el empleador
+     * la aprueba, deja de descontarse.
+     */
+    fun periodoDe(u: Usuario, marcajes: List<Marcaje>, justificaciones: List<Justificacion>, mes: String, ahoraMillis: Long): PeriodoPlanilla {
+        val ingreso = fechaIngreso(u)
+        val diasComputables = when {
+            ingreso == null || ingreso.take(7) < mes -> 30
+            ingreso.take(7) > mes -> 0
+            else -> (30 - (ingreso.takeLast(2).toInt() - 1)).coerceIn(0, 30)
+        }
+        val inc = DetectorIncidencias.detectar(u, marcajes, justificaciones, mes, ahoraMillis)
+            .filter { it.estado != EstadoIncidencia.JUSTIFICADA }
+        return PeriodoPlanilla(
+            diasComputables = diasComputables,
+            faltas = inc.count { it.tipo == TipoIncidencia.FALTA },
+            minutosTardanza = inc.filter { it.tipo == TipoIncidencia.TARDANZA }.sumOf { it.minutos }
+        )
+    }
+
+    /** Fecha de ingreso registrada por el empleador o, si no la hay, la fecha en que se vinculó a la empresa. */
+    fun fechaIngreso(u: Usuario): String? =
+        u.configPago.fechaIngreso.takeIf { Regex("\\d{4}-\\d{2}-\\d{2}").matches(it) } ?: u.creadoMillis?.let { Fechas.fechaDe(it) }
 }

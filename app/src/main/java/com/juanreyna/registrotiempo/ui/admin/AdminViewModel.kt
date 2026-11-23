@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import com.juanreyna.registrotiempo.domain.calc.ParametrosLegales
 import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import com.juanreyna.registrotiempo.util.AvisosIncidencias
 import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
@@ -94,9 +95,7 @@ class AdminViewModel @Inject constructor(
             val ms = porColab[u.uid].orEmpty()
             val dia = ResumenMensual.diaDe(Fechas.hoy(), ms, ahora, u.horario)
             val horas = dia.minutosEfectivos / 60.0
-            val costoHoy = PlanillaPeruCalculator.calcularDias(u.configPago, listOf(dia.horas)).let {
-                if (u.configPago.modo == ModoPago.SIMPLE) it.totalIngresos else it.totalIngresos + it.aportesEmpleador.sumOf { a -> a.monto }
-            }
+            val costoHoy = PlanillaPeruCalculator.costoDiario(u.configPago, dia.horas, ParametrosLegales.delMes(Fechas.mesActual()))
             FilaMonitoreo(u, JornadaCalculator.estado(ms, u.horario.deFecha(Fechas.hoy())), ms.lastOrNull(), horas, costoHoy)
         })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiAdmin())
@@ -161,6 +160,9 @@ class AdminViewModel @Inject constructor(
         ejecutar(if (borrarHistorial) "Cuenta e historial de ${u.nombre} eliminados" else "Cuenta de ${u.nombre} eliminada") {
             repo.eliminarColaboradorPorAdmin(u, borrarHistorial)
         }
+
+    fun guardarDatosEmpleador(ruc: String, razonSocial: String) =
+        ejecutar("Datos del empleador guardados") { repo.guardarDatosEmpleador(adminId, ruc, razonSocial) }
 
     fun guardarGeocerca(g: Geocerca) = ejecutar("Geocerca guardada") { repo.guardarGeocerca(adminId, g) }
 
@@ -235,7 +237,7 @@ class AdminViewModel @Inject constructor(
                 val activos = ui.value.colaboradores
                 val conMarcajes = ms.map { it.colaboradorId }.toSet()
                 val ex = exColaboradores.value.filter { x -> x.uid in conMarcajes && activos.none { it.uid == x.uid } }
-                resumenMes.value = ResumenMensual.construir(activos + ex, ms, System.currentTimeMillis())
+                resumenMes.value = ResumenMensual.construir(activos + ex, ms, System.currentTimeMillis(), mes, ui.value.justificaciones)
             }
             .onFailure { mensaje.value = "No se pudo cargar el mes: ${it.message}"; resumenMes.value = emptyList() }
     }
@@ -251,7 +253,10 @@ class AdminViewModel @Inject constructor(
                     "CSV" -> ReportExporter.planillaCsv(context, e, datos, mes) to "text/csv"
                     "COSTOS_PDF" -> ReportExporter.costosPdf(context, e, ReporteCostos.construir(datos), Fechas.etiquetaMes(mes)) to "application/pdf"
                     "COSTOS_CSV" -> ReportExporter.costosCsv(context, e, ReporteCostos.construir(datos), mes) to "text/csv"
-                    else -> ReportExporter.plameJor(context, datos, mes) to "text/plain"
+                    else -> {
+                        require(e.ruc.length == 11) { "registra primero el RUC de la empresa en Reportes → Datos del empleador" }
+                        ReportExporter.plameJor(context, datos, mes, e.ruc) to "text/plain"
+                    }
                 }
             }
         }.onSuccess { (f, mime) -> ReportExporter.compartir(context, f, mime) }

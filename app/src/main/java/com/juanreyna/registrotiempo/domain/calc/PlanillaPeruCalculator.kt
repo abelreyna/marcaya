@@ -4,20 +4,22 @@ import com.juanreyna.registrotiempo.domain.model.ConfigPago
 import com.juanreyna.registrotiempo.domain.model.ModoPago
 import com.juanreyna.registrotiempo.domain.model.RegimenLaboral
 import com.juanreyna.registrotiempo.domain.model.SistemaPension
-import kotlin.math.round
 
 /**
- * Parámetros legales vigentes. Se exponen como datos para poder actualizarlos
- * (p. ej. vía Remote Config) cuando cambien la RMV, la UIT o las comisiones AFP.
+ * Parámetros legales del Perú. Los valores por defecto son los vigentes desde octubre de 2026;
+ * [delMes] devuelve los de un mes concreto (la RMV y la UIT cambian con el tiempo).
+ * Revisar cada año: RMV, UIT, prima de seguro, comisiones AFP y remuneración máxima asegurable (SBS, trimestral).
  */
 data class ParametrosLegales(
-    val rmv: Double = 1130.0,              // Remuneración Mínima Vital (DS 006-2024-TR)
-    val uit: Double = 5350.0,              // UIT de referencia — verificar valor del año en curso
-    val horasMensualesBase: Double = 240.0, // 30 días × 8 h
+    val rmv: Double = 1230.0,              // RMV: DS 015-2026-TR, desde el 01/10/2026 (antes S/ 1,130, DS 006-2024-TR)
+    val uit: Double = 5500.0,              // UIT 2026: DS 301-2025-EF
+    val diasMes: Int = 30,                 // mes laboral de 30 días
+    val horasMensualesBase: Double = 240.0, // 30 días × 8 h (valor hora = remuneración ÷ 30 ÷ 8)
     val jornadaDiariaBase: Double = 8.0,
     val tasaOnp: Double = 0.13,
     val aporteAfp: Double = 0.10,
-    val primaSeguroAfp: Double = 0.017,
+    val primaSeguroAfp: Double = 0.0137,   // prima de seguro previsional (igual en las 4 AFP)
+    val remuneracionMaximaAsegurable: Double = 12732.70, // tope de la prima de seguro (SBS, oct–dic 2026)
     val comisionFlujo: Map<SistemaPension, Double> = mapOf(
         SistemaPension.AFP_INTEGRA to 0.0155,
         SistemaPension.AFP_PRIMA to 0.0160,
@@ -25,11 +27,32 @@ data class ParametrosLegales(
         SistemaPension.AFP_HABITAT to 0.0147
     ),
     val tasaEssalud: Double = 0.09,
-    val bonificacionExtraordinaria: Double = 0.09,
-    val tramosQuinta: List<Pair<Double, Double>> = listOf( // (límite superior en UIT, tasa)
+    val bonificacionExtraordinaria: Double = 0.09, // Ley 30334: lo que hubiera aportado a EsSalud por la gratificación
+    val tramosQuinta: List<Pair<Double, Double>> = listOf( // (límite superior en UIT, tasa) — art. 53 LIR
         5.0 to 0.08, 20.0 to 0.14, 35.0 to 0.17, 45.0 to 0.20, Double.MAX_VALUE to 0.30
     ),
     val deduccionQuintaUit: Double = 7.0
+) {
+    companion object {
+        /** Parámetros vigentes en el mes "yyyy-MM". */
+        fun delMes(mes: String): ParametrosLegales = when {
+            mes >= "2026-10" -> ParametrosLegales()
+            mes >= "2026-01" -> ParametrosLegales(rmv = 1130.0)
+            else -> ParametrosLegales(rmv = 1130.0, uit = 5350.0)
+        }
+    }
+}
+
+/**
+ * Datos del mes para la boleta del Modo Avanzado (criterio laboral peruano: mes de 30 días).
+ * @param diasComputables días del mes desde la fecha de ingreso (30 si ingresó antes del mes).
+ * @param faltas inasistencias injustificadas: se descuenta 1/30 de la remuneración por cada una.
+ * @param minutosTardanza tardanzas no justificadas: se descuentan al valor minuto.
+ */
+data class PeriodoPlanilla(
+    val diasComputables: Int = 30,
+    val faltas: Int = 0,
+    val minutosTardanza: Long = 0
 )
 
 /** Horas de un día ya separadas en ordinarias y extras (según el horario del colaborador). */
@@ -46,7 +69,12 @@ data class Boleta(
     val ingresos: List<LineaBoleta>,
     val descuentos: List<LineaBoleta>,
     val aportesEmpleador: List<LineaBoleta>,
-    val provisiones: List<LineaBoleta>
+    val provisiones: List<LineaBoleta>,
+    /** Días pagados del mes (Modo Avanzado). */
+    val diasLaborados: Int? = null,
+    val faltas: Int = 0,
+    /** Observaciones legales para el empleador (sueldo menor a la RMV, etc.). */
+    val advertencias: List<String> = emptyList()
 ) {
     val totalIngresos get() = ingresos.sumOf { it.monto }.r2()
     val totalDescuentos get() = descuentos.sumOf { it.monto }.r2()
@@ -55,7 +83,9 @@ data class Boleta(
         (totalIngresos + aportesEmpleador.sumOf { it.monto } + provisiones.sumOf { it.monto }).r2()
 }
 
-internal fun Double.r2(): Double = round(this * 100) / 100
+/** Redondeo a céntimos, mitad hacia arriba (46.845 → 46.85), como en planilla. */
+internal fun Double.r2(): Double =
+    if (isNaN() || isInfinite()) 0.0 else java.math.BigDecimal.valueOf(this).setScale(2, java.math.RoundingMode.HALF_UP).toDouble()
 
 object PlanillaPeruCalculator {
 
@@ -66,25 +96,51 @@ object PlanillaPeruCalculator {
     fun calcular(
         config: ConfigPago,
         horasPorDia: List<Double>,
-        p: ParametrosLegales = ParametrosLegales()
+        p: ParametrosLegales = ParametrosLegales(),
+        periodo: PeriodoPlanilla = PeriodoPlanilla()
     ): Boleta = calcularDias(config, horasPorDia.map {
         val extra = JornadaCalculator.horasExtraDelDia(it, p.jornadaDiariaBase)
         HorasDia(it - extra, extra)
-    }, p)
+    }, p, periodo)
 
     /** @param dias horas ordinarias y extras de cada día (las extras ya vienen del horario). */
     fun calcularDias(
         config: ConfigPago,
         dias: List<HorasDia>,
-        p: ParametrosLegales = ParametrosLegales()
+        p: ParametrosLegales = ParametrosLegales(),
+        periodo: PeriodoPlanilla = PeriodoPlanilla()
     ): Boleta = when (config.modo) {
         ModoPago.SIMPLE -> modoSimple(config, dias)
-        ModoPago.AVANZADO -> modoAvanzado(config, dias, p)
+        ModoPago.AVANZADO -> modoAvanzado(config, dias, p, periodo)
+    }
+
+    /**
+     * Costo de un día para el panel en vivo.
+     * - Simple: horas × tarifa.
+     * - Avanzado: 1/30 del costo laboral mensual (sueldo, asignación, EsSalud y provisiones) + horas extras con su EsSalud.
+     *   Un día sin horas no suma costo.
+     */
+    fun costoDiario(config: ConfigPago, dia: HorasDia, p: ParametrosLegales = ParametrosLegales()): Double {
+        if (dia.ordinarias + dia.extra <= 0.0) return 0.0
+        if (config.modo == ModoPago.SIMPLE) return ((dia.ordinarias + dia.extra) * config.tarifaPorHora).r2()
+        val mes = modoAvanzado(config, emptyList(), p, PeriodoPlanilla())
+        val (h1, h2) = tramosExtra(listOf(dia))
+        val vh = valorHoraExtra(config, p)
+        val extras = h1 * vh * 1.25 + h2 * vh * 1.35
+        val essalud = if (config.regimen == RegimenLaboral.MICROEMPRESA) 0.0 else p.tasaEssalud
+        return (mes.costoEmpleador / p.diasMes + extras * (1 + essalud)).r2()
     }
 
     /** Por día: las 2 primeras horas extra van al primer tramo y el resto al segundo. */
     private fun tramosExtra(dias: List<HorasDia>): Pair<Double, Double> =
         dias.sumOf { it.extra.coerceAtMost(2.0) } to dias.sumOf { (it.extra - 2.0).coerceAtLeast(0.0) }
+
+    private fun asignacionFamiliar(config: ConfigPago, p: ParametrosLegales) =
+        if (config.asignacionFamiliar) (p.rmv * 0.10).r2() else 0.0
+
+    /** Valor hora para el sobretiempo: remuneración ordinaria (sueldo + asignación familiar) ÷ 30 ÷ 8 (DS 007-2002-TR, art. 10). */
+    private fun valorHoraExtra(config: ConfigPago, p: ParametrosLegales) =
+        (config.sueldoBase + asignacionFamiliar(config, p)) / p.horasMensualesBase
 
     /**
      * Modo Simple: horas × tarifa, sin descuentos. Las horas extras se pagan a la misma tarifa, sin recargo
@@ -111,72 +167,115 @@ object PlanillaPeruCalculator {
         )
     }
 
-    private fun modoAvanzado(config: ConfigPago, dias: List<HorasDia>, p: ParametrosLegales): Boleta {
-        val valorHora = config.sueldoBase / p.horasMensualesBase
+    /**
+     * Modo Avanzado Perú. El sueldo es mensual (cubre los 30 días, incluido el descanso semanal):
+     * se paga completo salvo faltas injustificadas (1/30 cada una), tardanzas no justificadas o ingreso a mitad de mes.
+     */
+    private fun modoAvanzado(config: ConfigPago, dias: List<HorasDia>, p: ParametrosLegales, periodo: PeriodoPlanilla): Boleta {
+        val sueldo = config.sueldoBase
+        val af = asignacionFamiliar(config, p)
+        val diasComputables = periodo.diasComputables.coerceIn(0, p.diasMes)
+        val faltas = periodo.faltas.coerceIn(0, diasComputables)
+        val diasPagados = diasComputables - faltas
+        val esMicro = config.regimen == RegimenLaboral.MICROEMPRESA
 
-        // Horas extras por día: 25 % las 2 primeras, 35 % a partir de la tercera
+        // --- Ingresos ---
+        val remBasica = (sueldo / p.diasMes * diasPagados).r2()
+        val vhExtra = valorHoraExtra(config, p)
         val (he25, he35) = tramosExtra(dias)
-        val ordinarias = dias.sumOf { it.ordinarias }.coerceAtMost(p.horasMensualesBase)
-
-        val remuneracionOrdinaria = (ordinarias * valorHora).r2()
-        val asignacionFamiliar = if (config.asignacionFamiliar) (p.rmv * 0.10).r2() else 0.0
-        val montoHe25 = (he25 * valorHora * 1.25).r2()
-        val montoHe35 = (he35 * valorHora * 1.35).r2()
-
+        val montoHe25 = (he25 * vhExtra * 1.25).r2()
+        val montoHe35 = (he35 * vhExtra * 1.35).r2()
+        val descTardanza = (periodo.minutosTardanza / 60.0 * sueldo / p.horasMensualesBase).r2()
         val ingresos = buildList {
-            add(LineaBoleta("Remuneración ordinaria (${"%.2f".format(ordinarias)} h)", remuneracionOrdinaria))
-            if (asignacionFamiliar > 0) add(LineaBoleta("Asignación familiar (10 % RMV)", asignacionFamiliar))
+            val detalle = buildString {
+                append("$diasPagados de ${p.diasMes} días")
+                if (faltas > 0) append(" · $faltas ${if (faltas == 1) "falta" else "faltas"}")
+                if (diasComputables < p.diasMes) append(" · ingreso en el mes")
+            }
+            add(LineaBoleta("Remuneración básica ($detalle)", remBasica))
+            if (af > 0) add(LineaBoleta("Asignación familiar (10 % RMV)", af))
             if (montoHe25 > 0) add(LineaBoleta("Horas extras 25 % (${"%.2f".format(he25)} h)", montoHe25))
             if (montoHe35 > 0) add(LineaBoleta("Horas extras 35 % (${"%.2f".format(he35)} h)", montoHe35))
+            if (descTardanza > 0) add(LineaBoleta("(−) Tardanzas no justificadas (${periodo.minutosTardanza} min)", -descTardanza))
         }
-        val bruto = ingresos.sumOf { it.monto }
+        val bruto = ingresos.sumOf { it.monto }.coerceAtLeast(0.0)
 
-        // --- Descuentos al trabajador ---
+        // --- Descuentos al trabajador (sobre la remuneración del mes) ---
         val descuentos = mutableListOf<LineaBoleta>()
         if (config.sistemaPension == SistemaPension.ONP) {
             descuentos += LineaBoleta("ONP (13 %)", (bruto * p.tasaOnp).r2())
         } else {
-            descuentos += LineaBoleta("${config.sistemaPension.etiqueta} — Aporte obligatorio (10 %)", (bruto * p.aporteAfp).r2())
-            descuentos += LineaBoleta("${config.sistemaPension.etiqueta} — Prima de seguro", (bruto * p.primaSeguroAfp).r2())
+            val afp = config.sistemaPension.etiqueta
+            descuentos += LineaBoleta("$afp — Aporte obligatorio (10 %)", (bruto * p.aporteAfp).r2())
+            descuentos += LineaBoleta(
+                "$afp — Prima de seguro (${pct(p.primaSeguroAfp)})",
+                (minOf(bruto, p.remuneracionMaximaAsegurable) * p.primaSeguroAfp).r2()
+            )
             if (!config.comisionMixta) {
                 val c = p.comisionFlujo[config.sistemaPension] ?: 0.0
-                descuentos += LineaBoleta("${config.sistemaPension.etiqueta} — Comisión flujo", (bruto * c).r2())
+                descuentos += LineaBoleta("$afp — Comisión sobre flujo (${pct(c)})", (bruto * c).r2())
             }
         }
 
-        // --- Beneficios según régimen ---
-        val remComputable = config.sueldoBase + asignacionFamiliar
-        val factorBeneficios = when (config.regimen) {
+        // --- Beneficios sociales según régimen ---
+        val remComputable = sueldo + af
+        val factorGratiCts = when (config.regimen) {
             RegimenLaboral.GENERAL -> 1.0
-            RegimenLaboral.PEQUENA_EMPRESA -> 0.5
+            RegimenLaboral.PEQUENA_EMPRESA -> 0.5 // media gratificación y 15 remuneraciones diarias de CTS por año
             RegimenLaboral.MICROEMPRESA -> 0.0
         }
-        val gratiMensual = (remComputable / 6.0 * factorBeneficios).r2()
+        val mesCompleto = diasComputables == p.diasMes
+        val fraccionDias = diasPagados.toDouble() / p.diasMes
+        // Gratificación (Ley 27735): un sueldo en julio y otro en diciembre → 1/6 por mes calendario completo
+        val gratiMensual = if (mesCompleto) (remComputable * factorGratiCts / 6.0).r2() else 0.0
         val bonifExtra = (gratiMensual * p.bonificacionExtraordinaria).r2()
-        val ctsMensual = ((remComputable + remComputable / 6.0) / 12.0 * factorBeneficios).r2()
+        // CTS (DS 001-97-TR): (remuneración + 1/6 de la gratificación) ÷ 12 por mes; las faltas descuentan 1/30
+        val ctsMensual = (factorGratiCts * (remComputable + remComputable * factorGratiCts / 6.0) / 12.0 * fraccionDias).r2()
+        // Vacaciones: 30 días al año en el Régimen General, 15 en el REMYPE
+        val vacacionesMensual = (remComputable / (if (config.regimen == RegimenLaboral.GENERAL) 12.0 else 24.0) * fraccionDias).r2()
 
-        // --- Quinta categoría: proyección anual ---
-        val proyeccionAnual = bruto * 12 + (gratiMensual + bonifExtra) * 12
+        // --- Renta de 5.ª categoría: proyección anual (remuneración fija × 12 + gratificaciones + bonificación + extras del mes) ---
+        val extrasMes = montoHe25 + montoHe35
+        val gratiAnual = remComputable * factorGratiCts * 2 // julio + diciembre
+        val proyeccionAnual = remComputable * 12 + gratiAnual * (1 + p.bonificacionExtraordinaria) + extrasMes
         val quintaMensual = (impuestoQuintaAnual(proyeccionAnual, p) / 12.0).r2()
-        if (quintaMensual > 0) descuentos += LineaBoleta("Renta de 5ta categoría (proyección)", quintaMensual)
+        if (quintaMensual > 0) descuentos += LineaBoleta("Renta de 5.ª categoría (retención proyectada)", quintaMensual)
 
         // --- Aportes del empleador ---
-        val aportes = if (config.regimen == RegimenLaboral.MICROEMPRESA) {
-            listOf(LineaBoleta("SIS — Seguro Integral de Salud (Microempresa)", 0.0))
+        val aportes = if (esMicro) {
+            listOf(LineaBoleta("SIS Microempresas (aporte según afiliación; no calculado)", 0.0))
         } else {
-            listOf(LineaBoleta("EsSalud (9 %)", (maxOf(bruto, p.rmv) * p.tasaEssalud).r2()))
+            // Base mínima de EsSalud: la RMV (proporcional si ingresó a mitad de mes)
+            val baseEssalud = maxOf(bruto, p.rmv * diasComputables / p.diasMes)
+            listOf(LineaBoleta("EsSalud (9 %)", (baseEssalud * p.tasaEssalud).r2()))
         }
 
         val provisiones = buildList {
-            if (factorBeneficios > 0) {
-                add(LineaBoleta("Provisión CTS", ctsMensual))
-                add(LineaBoleta("Provisión gratificación (Jul/Dic)", gratiMensual))
-                add(LineaBoleta("Bonificación extraordinaria (9 %)", bonifExtra))
+            if (gratiMensual > 0) {
+                add(LineaBoleta("Provisión gratificación (julio y diciembre)", gratiMensual))
+                add(LineaBoleta("Provisión bonificación extraordinaria (9 %)", bonifExtra))
             }
+            if (ctsMensual > 0) add(LineaBoleta("Provisión CTS", ctsMensual))
+            if (vacacionesMensual > 0) add(LineaBoleta("Provisión vacaciones (${if (config.regimen == RegimenLaboral.GENERAL) 30 else 15} días al año)", vacacionesMensual))
         }
 
-        return Boleta(ModoPago.AVANZADO, ordinarias, he25, he35, ingresos, descuentos, aportes, provisiones)
+        val advertencias = buildList {
+            if (sueldo <= 0) add("Falta registrar el sueldo base del colaborador.")
+            else if (sueldo < p.rmv) add("El sueldo base (S/ ${"%,.2f".format(sueldo)}) es menor que la RMV vigente (S/ ${"%,.2f".format(p.rmv)}). Solo es válido si la jornada es menor a 4 horas diarias.")
+            if (config.asignacionFamiliar && config.regimen != RegimenLaboral.GENERAL)
+                add("En el REMYPE la asignación familiar no es obligatoria; se está pagando por acuerdo.")
+            if (esMicro) add("Microempresa: sin CTS ni gratificaciones; el seguro de salud es el SIS (o EsSalud si el empleador lo eligió).")
+            if (quintaMensual > 0) add("La retención de 5.ª categoría es una proyección (÷ 12). En la planilla real se aplica el procedimiento del art. 40 del Reglamento de la LIR.")
+        }
+
+        val ordinarias = dias.sumOf { it.ordinarias }
+        return Boleta(
+            ModoPago.AVANZADO, ordinarias, he25, he35, ingresos, descuentos, aportes, provisiones,
+            diasLaborados = diasPagados, faltas = faltas, advertencias = advertencias
+        )
     }
+
+    private fun pct(v: Double) = "%.2f %%".format(v * 100).replace(".00 %", " %")
 
     /** Impuesto anual de 5ta categoría con tramos progresivos sobre la renta neta (bruto − 7 UIT). */
     fun impuestoQuintaAnual(rentaBrutaAnual: Double, p: ParametrosLegales = ParametrosLegales()): Double {

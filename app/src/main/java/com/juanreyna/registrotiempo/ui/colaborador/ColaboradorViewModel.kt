@@ -79,7 +79,9 @@ class ColaboradorViewModel @Inject constructor(
     val ui: StateFlow<UiColaborador> = combine(usuario, empresa, hoy, mes, justif) { u, e, h, m, j ->
         // Solo los datos de la empresa actual (si antes trabajó en otra, sus marcajes no se mezclan)
         val delAdmin = { mm: List<Marcaje> -> mm.filter { it.adminId == u?.adminId } }
-        UiColaborador(u, e, delAdmin(h), u?.let { ResumenMensual.construir(listOf(it), delAdmin(m), System.currentTimeMillis()).first() }, j.filter { it.adminId == u?.adminId })
+        UiColaborador(u, e, delAdmin(h), u?.let { ResumenMensual.construir(
+            listOf(it), delAdmin(m), System.currentTimeMillis(), mesSeleccionado.value, j.filter { x -> x.adminId == it.adminId }
+        ).first() }, j.filter { it.adminId == u?.adminId })
     }.combine(reloj) { estado, t -> estado.copy(ahora = t) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiColaborador())
 

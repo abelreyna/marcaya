@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import androidx.compose.material.icons.filled.Event
 import com.juanreyna.registrotiempo.ui.components.SelectorDocumento
 import com.juanreyna.registrotiempo.ui.login.CampoDigitos
 import com.juanreyna.registrotiempo.domain.model.TipoDocumento
@@ -518,6 +519,7 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
     val dniValido = tipoDoc.esValido(dni)
     var tarifa by remember { mutableStateOf(if (cfg.tarifaPorHora > 0) cfg.tarifaPorHora.toString() else "") }
     var sueldo by remember { mutableStateOf(if (cfg.sueldoBase > 0) cfg.sueldoBase.toString() else "") }
+    val rmv = remember { com.juanreyna.registrotiempo.domain.calc.ParametrosLegales.delMes(Fechas.mesActual()).rmv }
     var horario by remember { mutableStateOf(u.horario) }
     var tolerancia by remember { mutableStateOf(u.horario.toleranciaMin.toString()) }
     val toleranciaMin = tolerancia.toIntOrNull()
@@ -541,8 +543,21 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                     Text("Horas extras: se pagan a la misma tarifa por hora, sin recargo.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
                 } else {
+                    val sueldoNum = sueldo.replace(',', '.').toDoubleOrNull() ?: 0.0
                     OutlinedTextField(sueldo, { sueldo = it }, label = { Text("Sueldo base mensual ($mon)") }, shape = FormaCampo,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = sueldoNum in 0.01..(rmv - 0.01),
+                        supportingText = {
+                            Text(
+                                if (sueldoNum in 0.01..(rmv - 0.01)) "Menor que la RMV (S/ ${"%,.2f".format(rmv)}): solo válido con jornada menor a 4 h"
+                                else "RMV vigente: S/ ${"%,.2f".format(rmv)}"
+                            )
+                        })
+                    OutlinedTextField(cfg.cargo, { cfg = cfg.copy(cargo = it.take(60)) }, label = { Text("Cargo o puesto") },
+                        shape = FormaCampo, singleLine = true)
+                    CampoFecha("Fecha de ingreso", cfg.fechaIngreso.ifBlank { u.creadoMillis?.let { Fechas.fechaDe(it) } ?: Fechas.hoy() }) {
+                        cfg = cfg.copy(fechaIngreso = it)
+                    }
                     Text("Régimen Laboral", fontWeight = FontWeight.SemiBold)
                     RegimenLaboral.entries.forEach { r ->
                         Row(Modifier.fillMaxWidth().clickable { cfg = cfg.copy(regimen = r) }, verticalAlignment = Alignment.CenterVertically) {
@@ -560,10 +575,16 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                             fila.forEach { s -> ChipFiltro(s.etiqueta.removePrefix("AFP "), cfg.sistemaPension == s) { cfg = cfg.copy(sistemaPension = s) } }
                         }
                     }
-                    if (cfg.sistemaPension != SistemaPension.ONP) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Comisión mixta (sin comisión flujo)", Modifier.weight(1f))
-                        Switch(cfg.comisionMixta, { cfg = cfg.copy(comisionMixta = it) }, colors = SwitchDefaults.colors(checkedTrackColor = Teal))
+                    if (cfg.sistemaPension != SistemaPension.ONP) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Comisión mixta (sin comisión flujo)", Modifier.weight(1f))
+                            Switch(cfg.comisionMixta, { cfg = cfg.copy(comisionMixta = it) }, colors = SwitchDefaults.colors(checkedTrackColor = Teal))
+                        }
+                        OutlinedTextField(cfg.cuspp, { cfg = cfg.copy(cuspp = it.uppercase().filter(Char::isLetterOrDigit).take(12)) },
+                            label = { Text("CUSPP (código de afiliado AFP)") }, shape = FormaCampo, singleLine = true)
                     }
+                    if (cfg.asignacionFamiliar && cfg.regimen != RegimenLaboral.GENERAL)
+                        Text("En el REMYPE la asignación familiar no es obligatoria.", style = MaterialTheme.typography.bodySmall, color = Ambar)
                     Text("Horas extras con recargo de ley: +25 % las 2 primeras horas del día y +35 % desde la tercera.",
                         style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
                 }
@@ -626,6 +647,27 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
         },
         dismissButton = { TextButton(onClick = alCerrar) { Text("Cancelar") } }
     )
+}
+
+/** Campo de fecha "yyyy-MM-dd" que abre el calendario del sistema. */
+@Composable
+internal fun CampoFecha(etiqueta: String, valor: String, modifier: Modifier = Modifier, alCambiar: (String) -> Unit) {
+    val context = LocalContext.current
+    Column(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, Borde, RoundedCornerShape(12.dp))
+            .clickable {
+                val p = valor.split("-").mapNotNull { it.toIntOrNull() }
+                val (a, m, d) = if (p.size == 3) Triple(p[0], p[1] - 1, p[2]) else Triple(2026, 0, 1)
+                android.app.DatePickerDialog(context, { _, y, mo, dd -> alCambiar("%04d-%02d-%02d".format(y, mo + 1, dd)) }, a, m, d).show()
+            }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(etiqueta, style = MaterialTheme.typography.labelSmall, color = TextoSecundario)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(valor.split("-").reversed().joinToString("/"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = AzulMarino)
+            Icon(Icons.Default.Event, null, tint = Teal, modifier = Modifier.size(18.dp))
+        }
+    }
 }
 
 /** Campo de hora que abre el reloj del sistema (formato 24 h). */
@@ -832,6 +874,7 @@ private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {
                 BotonPillContorno(Fechas.etiquetaMes(mes), { vm.cargarMes(Fechas.mesActual()) }, Modifier.weight(1f), color = Teal)
             }
         }
+        item { DatosEmpleador(ui.empresa!!) { ruc, razon -> vm.guardarDatosEmpleador(ruc, razon) } }
         item {
             Seccion(borde = Borde) {
                 Text("SUNAFIL · PLAME", Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = AzulMarino)
@@ -862,6 +905,34 @@ private fun PestanaReportes(vm: AdminViewModel, ui: UiAdmin, infoVip: InfoVip) {
             item { ReporteCostosSeccion(r, mon, Fechas.etiquetaMes(mes), alExportar = { vm.exportar(context, it) }) }
         }
         item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+/** RUC y razón social: obligatorios en la boleta (DS 001-98-TR), el registro de asistencia (DS 004-2006-TR) y el PLAME. */
+@Composable
+private fun DatosEmpleador(e: com.juanreyna.registrotiempo.domain.model.Empresa, alGuardar: (String, String) -> Unit) {
+    var editando by remember { mutableStateOf(false) }
+    var ruc by remember(e.ruc) { mutableStateOf(e.ruc) }
+    var razon by remember(e.razonSocial) { mutableStateOf(e.razonSocial.ifBlank { e.nombreComercial }) }
+    val rucValido = ruc.matches(Regex("(10|15|16|17|20)[0-9]{9}"))
+    Seccion("Datos del empleador", borde = if (e.ruc.isBlank()) Ambar else Borde) {
+        if (!editando && e.ruc.isNotBlank()) {
+            FilaDato("Razón social", e.razonSocial.ifBlank { e.nombreComercial })
+            FilaDato("RUC", e.ruc)
+            TextButton({ editando = true }) { Text("Editar", color = Teal) }
+        } else {
+            if (e.ruc.isBlank()) Text(
+                "Registra el RUC y la razón social: aparecen en la boleta, el registro de asistencia y el archivo PLAME.",
+                style = MaterialTheme.typography.bodySmall, color = TextoSecundario
+            )
+            OutlinedTextField(razon, { razon = it.take(100) }, Modifier.fillMaxWidth(), label = { Text("Razón social") }, shape = FormaCampo, singleLine = true)
+            OutlinedTextField(
+                ruc, { ruc = it.filter(Char::isDigit).take(11) }, Modifier.fillMaxWidth(), label = { Text("RUC (11 dígitos)") },
+                shape = FormaCampo, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = ruc.isNotEmpty() && !rucValido, supportingText = { Text("${ruc.length}/11") }
+            )
+            BotonPill("Guardar datos del empleador", { alGuardar(ruc, razon); editando = false }, enabled = rucValido && razon.isNotBlank())
+        }
     }
 }
 

@@ -179,6 +179,12 @@ class FirestoreRepository @Inject constructor() {
         empresas.document(adminId).update("geocerca", g.aMapa()).await()
     }
 
+    /** RUC (11 dígitos) y razón social del empleador para boletas y reportes legales. */
+    suspend fun guardarDatosEmpleador(adminId: String, ruc: String, razonSocial: String) {
+        require(ruc.matches(Regex("(10|15|16|17|20)[0-9]{9}"))) { "El RUC debe tener 11 dígitos y empezar con 10, 15, 16, 17 o 20" }
+        empresas.document(adminId).update(mapOf("ruc" to ruc, "razonSocial" to razonSocial.trim())).await()
+    }
+
     suspend fun guardarModoGlobal(adminId: String, modo: ModoPago, moneda: String) {
         empresas.document(adminId).update(mapOf("modoPagoGlobal" to modo.name, "moneda" to moneda)).await()
     }

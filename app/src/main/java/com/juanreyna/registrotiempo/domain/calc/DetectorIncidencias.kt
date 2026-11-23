@@ -31,7 +31,11 @@ object DetectorIncidencias {
         if (!u.activo) return emptyList()
         val hoy = Fechas.fechaDe(ahoraMillis)
         val minutoAhora = Fechas.minutosDelDia(ahoraMillis)
-        val desde = u.creadoMillis?.let { Fechas.fechaDe(it) } ?: ""
+        // Sin marcajes antes de usar la app no hay faltas: se cuenta desde el alta y, si es posterior, desde la fecha de ingreso
+        val desde = listOfNotNull(
+            u.creadoMillis?.let { Fechas.fechaDe(it) },
+            u.configPago.fechaIngreso.takeIf { Regex("\\d{4}-\\d{2}-\\d{2}").matches(it) }
+        ).maxOrNull() ?: ""
         val porFecha = marcajesMes.filter { it.colaboradorId == u.uid }.groupBy { it.fecha }
         val crudas = mutableListOf<Triple<String, TipoIncidencia, Pair<Long, String>>>()
 

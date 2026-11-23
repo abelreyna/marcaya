@@ -1,5 +1,7 @@
 package com.juanreyna.registrotiempo.util
 
+import com.juanreyna.registrotiempo.domain.model.SistemaPension
+import com.juanreyna.registrotiempo.domain.calc.ResumenMensual
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -90,12 +92,20 @@ object ReportExporter {
         val l = Lienzo(PdfDocument()).apply { nuevaPagina() }
         val mon = empresa.moneda.simbolo
         val b: Boleta = resumen.boleta
+        val u = resumen.usuario
+        val cfg = u.configPago
         l.linea("BOLETA DE PAGO PROYECTADA", l.titulo, salto = 22f)
-        l.linea(empresa.nombreComercial, l.negrita)
-        l.linea("Periodo: $mesEtiqueta")
-        l.linea("Trabajador: ${resumen.usuario.nombre}   DNI/CE: ${resumen.usuario.dni}")
-        l.linea("Modalidad: ${if (b.modo == ModoPago.SIMPLE) "Modo Simple (pago por hora)" else "Modo Avanzado Perú — ${resumen.usuario.configPago.regimen.etiqueta}"}")
-        l.linea("Días trabajados: ${resumen.dias.size}   Horas efectivas: ${"%.2f".format(resumen.horasTotales)}   Tardanzas: ${resumen.tardanzas}")
+        l.linea(empresa.razonSocial.ifBlank { empresa.nombreComercial }, l.negrita)
+        l.linea("RUC: ${empresa.ruc.ifBlank { "— (registrar en Reportes → Datos del empleador)" }}   Periodo: $mesEtiqueta")
+        l.linea("Trabajador: ${u.nombre}   ${u.tipoDocumento.etiqueta}: ${u.dni.ifBlank { "—" }}")
+        if (b.modo == ModoPago.AVANZADO) {
+            l.linea("Cargo: ${cfg.cargo.ifBlank { "—" }}   Fecha de ingreso: ${ResumenMensual.fechaIngreso(u)?.split("-")?.reversed()?.joinToString("/") ?: "—"}")
+            l.linea("Régimen laboral: ${cfg.regimen.etiqueta}   Régimen pensionario: ${cfg.sistemaPension.etiqueta}${if (cfg.sistemaPension != SistemaPension.ONP) "   CUSPP: ${cfg.cuspp.ifBlank { "—" }}" else ""}")
+            l.linea("Días laborados: ${b.diasLaborados ?: "—"}   Faltas: ${b.faltas}   Horas ordinarias: ${"%.2f".format(b.horasOrdinarias)}   Horas extras: ${"%.2f".format(b.horasExtra25 + b.horasExtra35)}")
+        } else {
+            l.linea("Modalidad: Modo Simple (pago por hora)")
+            l.linea("Días trabajados: ${resumen.dias.size}   Horas efectivas: ${"%.2f".format(resumen.horasTotales)}   Tardanzas: ${resumen.tardanzas}")
+        }
         l.separador()
         l.linea("INGRESOS", l.negrita)
         b.ingresos.forEach { l.fila(it.concepto, m(mon, it.monto)) }
@@ -112,8 +122,15 @@ object ReportExporter {
             (b.aportesEmpleador + b.provisiones).forEach { l.fila(it.concepto, m(mon, it.monto)) }
             l.fila("Costo laboral total del empleador", m(mon, b.costoEmpleador), l.negrita)
         }
+        if (b.advertencias.isNotEmpty()) {
+            l.separador(); l.linea("OBSERVACIONES", l.negrita)
+            b.advertencias.forEach { l.linea("• $it", Paint(l.normal).apply { textSize = 7.5f }) }
+        }
         l.linea("")
         l.linea("Documento referencial: proyección calculada con los marcajes registrados a la fecha.", l.normal)
+        if (b.modo == ModoPago.AVANZADO) {
+            l.linea("Para valer como boleta de pago debe emitirse con la firma del empleador (DS 001-98-TR; firma digital: DS 009-2011-TR).", Paint(l.normal).apply { textSize = 7.5f })
+        }
         val f = File(carpeta(context), "boleta_${resumen.usuario.dni.ifBlank { resumen.usuario.uid.take(6) }}_$mesEtiqueta.pdf".replace(" ", "_"))
         l.terminar(f)
         return f
@@ -124,11 +141,11 @@ object ReportExporter {
         val l = Lienzo(PdfDocument()).apply { nuevaPagina() }
         l.linea("REGISTRO DE CONTROL DE ASISTENCIA", l.titulo, salto = 20f)
         l.linea("Conforme al D.S. N.º 004-2006-TR", l.normal)
-        l.linea("Empleador: ${empresa.nombreComercial}   Periodo: $mesEtiqueta", l.negrita)
+        l.linea("Empleador: ${empresa.razonSocial.ifBlank { empresa.nombreComercial }}   RUC: ${empresa.ruc.ifBlank { "—" }}   Periodo: $mesEtiqueta", l.negrita)
         l.separador()
         val xs = listOf(40f, 120f, 200f, 280f, 360f, 440f)
         resumenes.forEach { r ->
-            l.linea("${r.usuario.nombre} — DNI/CE ${r.usuario.dni}", l.negrita)
+            l.linea("${r.usuario.nombre} — ${r.usuario.tipoDocumento.etiqueta} ${r.usuario.dni}", l.negrita)
             l.columnas(listOf("Fecha", "Ingreso", "Salida", "Descanso", "Efectivo", "Verificación"), xs, l.negrita)
             r.dias.forEach { d ->
                 l.columnas(
@@ -268,12 +285,13 @@ object ReportExporter {
      * Archivo de jornada laboral PLAME: 0601AAAAMM{RUC}.jor
      * Formato por línea: tipoDoc|numDoc|horasOrd|minOrd|horasSobretiempo|minSobretiempo|
      */
-    fun plameJor(context: Context, resumenes: List<ResumenColaborador>, mes: String, ruc: String = "00000000000"): File {
+    fun plameJor(context: Context, resumenes: List<ResumenColaborador>, mes: String, ruc: String): File {
         val f = File(carpeta(context), "0601${mes.replace("-", "")}$ruc.jor")
         val texto = resumenes.joinToString("\r\n") { r ->
             val ordMin = (r.boleta.horasOrdinarias * 60).toLong()
             val extraMin = ((r.boleta.horasExtra25 + r.boleta.horasExtra35) * 60).toLong()
-            val tipoDoc = if (r.usuario.dni.length == 8) "01" else "04"
+            // Tabla 3 de SUNAT: 01 = DNI, 04 = Carnet de extranjería
+            val tipoDoc = if (r.usuario.tipoDocumento == com.juanreyna.registrotiempo.domain.model.TipoDocumento.DNI) "01" else "04"
             "$tipoDoc|${r.usuario.dni}|${ordMin / 60}|${ordMin % 60}|${extraMin / 60}|${extraMin % 60}|"
         }
         f.writeText(texto)

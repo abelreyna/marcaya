@@ -3,6 +3,8 @@ package com.juanreyna.registrotiempo
 import com.juanreyna.registrotiempo.domain.calc.DetectorIncidencias
 import com.juanreyna.registrotiempo.domain.calc.JornadaCalculator
 import com.juanreyna.registrotiempo.domain.calc.ParametrosLegales
+import com.juanreyna.registrotiempo.domain.calc.PeriodoPlanilla
+import com.juanreyna.registrotiempo.domain.calc.HorasDia
 import com.juanreyna.registrotiempo.domain.calc.PlanillaPeruCalculator
 import com.juanreyna.registrotiempo.domain.calc.ResumenMensual
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
@@ -54,12 +56,144 @@ class DomainTest {
         assertEquals(186.0, b.netoAPagar, 0.001)
     }
 
-    @Test fun modoAvanzado_horasExtrasYOnp() {
+    @Test fun modoAvanzado_sueldoMensualCompletoMasExtras() {
         val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 2400.0, sistemaPension = SistemaPension.ONP, regimen = RegimenLaboral.GENERAL)
-        // Un día de 11 h: 8 ordinarias + 2 al 25 % + 1 al 35 %; valor hora = 10
+        // El sueldo mensual se paga completo (no por horas); un día de 11 h suma 2 h al 25 % y 1 h al 35 % (valor hora = 2400 / 240 = 10)
         val b = PlanillaPeruCalculator.calcular(cfg, listOf(11.0))
-        assertEquals(80.0 + 25.0 + 13.5, b.totalIngresos, 0.001)
-        assertEquals((118.5 * 0.13), b.totalDescuentos, 0.01)
+        assertEquals(2400.0 + 25.0 + 13.5, b.totalIngresos, 0.001)
+        assertEquals(2438.5 * 0.13, b.ingresos.let { b.descuentos.first { it.concepto.startsWith("ONP") }.monto }, 0.01)
+        assertEquals(30, b.diasLaborados)
+    }
+
+    // ---------- Auditoría Modo Avanzado Perú (noviembre 2026: RMV S/ 1,230, UIT S/ 5,500) ----------
+    private val nov26 = ParametrosLegales.delMes("2026-11")
+    private fun monto(b: com.juanreyna.registrotiempo.domain.calc.Boleta, prefijo: String) =
+        (b.ingresos + b.descuentos + b.aportesEmpleador + b.provisiones).first { it.concepto.startsWith(prefijo) }.monto
+
+    @Test fun parametros_vigentesPorMes() {
+        assertEquals(1230.0, nov26.rmv, 0.0)
+        assertEquals(5500.0, nov26.uit, 0.0)
+        assertEquals(1130.0, ParametrosLegales.delMes("2026-09").rmv, 0.0)   // antes del DS 015-2026-TR
+        assertEquals(5500.0, ParametrosLegales.delMes("2026-09").uit, 0.0)
+        assertEquals(5350.0, ParametrosLegales.delMes("2025-12").uit, 0.0)
+        assertEquals(0.0137, nov26.primaSeguroAfp, 0.0)
+    }
+
+    @Test fun avanzado_regimenGeneral_afpConAsignacionYExtras() {
+        // Sueldo 3000 + asignación familiar 123 (10 % de 1230); 3 h extras en un día; AFP Integra comisión flujo
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 3000.0, asignacionFamiliar = true,
+            sistemaPension = SistemaPension.AFP_INTEGRA, regimen = RegimenLaboral.GENERAL)
+        val b = PlanillaPeruCalculator.calcularDias(cfg, listOf(HorasDia(8.0, 3.0)), nov26)
+        // Valor hora extra = (3000 + 123) / 240 = 13.0125 → 2 h × 1.25 = 32.53 ; 1 h × 1.35 = 17.57
+        assertEquals(3000.0, monto(b, "Remuneración básica"), 0.001)
+        assertEquals(123.0, monto(b, "Asignación familiar"), 0.001)
+        assertEquals(32.53, monto(b, "Horas extras 25"), 0.001)
+        assertEquals(17.57, monto(b, "Horas extras 35"), 0.001)
+        assertEquals(3173.10, b.totalIngresos, 0.001)
+        // AFP sobre 3173.10: aporte 10 % = 317.31 ; prima 1.37 % = 43.47 ; comisión 1.55 % = 49.18
+        assertEquals(317.31, monto(b, "AFP Integra — Aporte"), 0.001)
+        assertEquals(43.47, monto(b, "AFP Integra — Prima"), 0.001)
+        assertEquals(49.18, monto(b, "AFP Integra — Comisión"), 0.001)
+        // 5.ª: 3123 × 12 + 3123 × 2 × 1.09 + 50.10 = 44 334.24 − 7 UIT (38 500) = 5 834.24 × 8 % = 466.74 / 12 = 38.895 → 38.90
+        assertEquals(38.90, monto(b, "Renta de 5.ª"), 0.001)
+        assertEquals(2724.24, b.netoAPagar, 0.001)
+        // Empleador: EsSalud 9 % = 285.58 ; gratificación 3123/6 = 520.50 ; bonificación 9 % = 46.85 ;
+        // CTS (3123 + 520.50) / 12 = 303.63 ; vacaciones 3123 / 12 = 260.25
+        assertEquals(285.58, monto(b, "EsSalud"), 0.001)
+        assertEquals(520.50, monto(b, "Provisión gratificación"), 0.001)
+        assertEquals(46.85, monto(b, "Provisión bonificación"), 0.001)
+        assertEquals(303.63, monto(b, "Provisión CTS"), 0.001)
+        assertEquals(260.25, monto(b, "Provisión vacaciones"), 0.001)
+        assertEquals(3173.10 + 285.58 + 520.50 + 46.85 + 303.63 + 260.25, b.costoEmpleador, 0.001)
+        assertTrue(b.advertencias.none { it.contains("RMV") })
+    }
+
+    @Test fun avanzado_faltasYTardanzasSeDescuentan() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 1500.0, sistemaPension = SistemaPension.ONP)
+        val b = PlanillaPeruCalculator.calcularDias(cfg, emptyList(), nov26, PeriodoPlanilla(faltas = 2, minutosTardanza = 90))
+        // 1500 / 30 × 28 = 1400 ; tardanza 1.5 h × (1500 / 240) = 9.38
+        assertEquals(1400.0, monto(b, "Remuneración básica"), 0.001)
+        assertEquals(-9.38, monto(b, "(−) Tardanzas"), 0.001)
+        assertEquals(1390.62, b.totalIngresos, 0.001)
+        assertEquals(180.78, monto(b, "ONP"), 0.001)              // 13 % de 1390.62
+        assertTrue(b.descuentos.none { it.concepto.startsWith("Renta") }) // 21 270 al año < 7 UIT
+        assertEquals(125.16, monto(b, "EsSalud"), 0.001)          // 9 % de 1390.62 (mayor que la RMV)
+        assertEquals(136.11, monto(b, "Provisión CTS"), 0.001)    // (1500 + 250) / 12 × 28/30
+        assertEquals(116.67, monto(b, "Provisión vacaciones"), 0.001) // 1500 / 12 × 28/30
+        assertEquals(28, b.diasLaborados)
+        assertEquals(2, b.faltas)
+    }
+
+    @Test fun avanzado_pequenaEmpresa_ingresoAMitadDeMes() {
+        // Ingresa el 16/11: 15 días ; AFP Prima con comisión mixta ; asignación familiar por acuerdo
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 1230.0, asignacionFamiliar = true,
+            sistemaPension = SistemaPension.AFP_PRIMA, comisionMixta = true, regimen = RegimenLaboral.PEQUENA_EMPRESA)
+        val b = PlanillaPeruCalculator.calcularDias(cfg, emptyList(), nov26, PeriodoPlanilla(diasComputables = 15))
+        assertEquals(615.0, monto(b, "Remuneración básica"), 0.001)
+        assertEquals(738.0, b.totalIngresos, 0.001)
+        assertEquals(73.80, monto(b, "AFP Prima — Aporte"), 0.001)
+        assertEquals(10.11, monto(b, "AFP Prima — Prima"), 0.001)
+        assertTrue(b.descuentos.none { it.concepto.contains("Comisión") })   // mixta: sin comisión sobre flujo
+        assertEquals(66.42, monto(b, "EsSalud"), 0.001)
+        assertTrue(b.provisiones.none { it.concepto.contains("gratificación") }) // mes incompleto: no suma gratificación
+        // CTS pequeña empresa = ½ × (1353 + 1353 × ½ / 6) / 12 × 15/30 = 30.54 ; vacaciones 15 días = 1353 / 24 × ½ = 28.19
+        assertEquals(30.54, monto(b, "Provisión CTS"), 0.001)
+        assertEquals(28.19, monto(b, "Provisión vacaciones"), 0.001)
+        assertTrue(b.advertencias.any { it.contains("REMYPE") })
+    }
+
+    @Test fun avanzado_microempresa_sinCtsNiGratificacion() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 1230.0, regimen = RegimenLaboral.MICROEMPRESA)
+        val b = PlanillaPeruCalculator.calcularDias(cfg, emptyList(), nov26)
+        assertEquals(159.90, monto(b, "ONP"), 0.001)
+        assertTrue(b.provisiones.none { it.concepto.contains("CTS") || it.concepto.contains("gratificación") })
+        assertEquals(51.25, monto(b, "Provisión vacaciones"), 0.001)   // 15 días: 1230 / 24
+        assertTrue(b.aportesEmpleador.none { it.concepto.startsWith("EsSalud") })
+    }
+
+    @Test fun avanzado_quintaCategoriaYTopeDePrima() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 10000.0, sistemaPension = SistemaPension.AFP_HABITAT)
+        val b = PlanillaPeruCalculator.calcularDias(cfg, emptyList(), nov26)
+        // 120 000 + 20 000 × 1.09 = 141 800 − 38 500 = 103 300 → 27 500 × 8 % + 75 800 × 14 % = 12 812 / 12 = 1 067.67
+        assertEquals(1067.67, monto(b, "Renta de 5.ª"), 0.001)
+        assertEquals(137.0, monto(b, "AFP Hábitat — Prima"), 0.001)
+        assertEquals(147.0, monto(b, "AFP Hábitat — Comisión"), 0.001)
+        // Sueldo mayor que la remuneración máxima asegurable: la prima se calcula sobre el tope (12 732.70)
+        val alto = PlanillaPeruCalculator.calcularDias(cfg.copy(sueldoBase = 15000.0), emptyList(), nov26)
+        assertEquals(174.44, monto(alto, "AFP Hábitat — Prima"), 0.001)
+        assertEquals(1500.0, monto(alto, "AFP Hábitat — Aporte"), 0.001)
+    }
+
+    @Test fun avanzado_sueldoMenorQueRmvAdvierte() {
+        val b = PlanillaPeruCalculator.calcularDias(ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 1130.0), emptyList(), nov26)
+        assertTrue(b.advertencias.any { it.contains("RMV") })
+        // La base mínima de EsSalud es la RMV vigente
+        assertEquals(110.70, monto(b, "EsSalud"), 0.001)
+    }
+
+    @Test fun avanzado_costoDiarioDelPanel() {
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 3000.0, asignacionFamiliar = true, sistemaPension = SistemaPension.AFP_INTEGRA)
+        val mes = PlanillaPeruCalculator.calcularDias(cfg, emptyList(), nov26)
+        assertEquals(mes.costoEmpleador / 30, PlanillaPeruCalculator.costoDiario(cfg, HorasDia(8.0, 0.0), nov26), 0.01)
+        assertEquals(0.0, PlanillaPeruCalculator.costoDiario(cfg, HorasDia(0.0, 0.0), nov26), 0.0)
+        // Antes se sumaban la asignación, el EsSalud mínimo y las provisiones de todo un mes en un solo día
+        assertTrue(PlanillaPeruCalculator.costoDiario(cfg, HorasDia(8.0, 0.0), nov26) < 200.0)
+    }
+
+    @Test fun avanzado_periodoDesdeFechaDeIngreso() {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("America/Lima")).apply {
+            set(2026, 10, 16, 9, 0, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val u = Usuario(uid = "x", creadoMillis = cal.timeInMillis,
+            configPago = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 1500.0, fechaIngreso = "2026-11-16"))
+        val ahora = cal.timeInMillis + 6L * 24 * 3600 * 1000 // domingo 22/11
+        val p = ResumenMensual.periodoDe(u, emptyList(), emptyList(), "2026-11", ahora)
+        assertEquals(15, p.diasComputables)
+        assertEquals(6, p.faltas) // lunes 16 a sábado 21 sin marcar; no cuenta antes del ingreso ni el domingo
+        // Una falta justificada (aprobada) ya no se descuenta
+        val j = Justificacion(colaboradorId = "x", fecha = "2026-11-16", incidencia = TipoIncidencia.FALTA,
+            motivo = MotivoJustificacion.CITA_MEDICA, estado = EstadoJustificacion.APROBADA)
+        assertEquals(5, ResumenMensual.periodoDe(u, emptyList(), listOf(j), "2026-11", ahora).faltas)
     }
 
     @Test fun horario_distintoPorDia() {
