@@ -302,17 +302,23 @@ fun Semaforo(color: Color, texto: String, detalle: String? = null, icono: ImageV
 
 /** Tarjeta de alerta del Centro de Notificaciones. */
 @Composable
-fun TarjetaAviso(icono: ImageVector, titulo: String, detalle: String, color: Color = AzulMarino, tinte: Color = Color.White) {
+fun TarjetaAviso(
+    icono: ImageVector, titulo: String, detalle: String, color: Color = AzulMarino, tinte: Color = Color.White,
+    alDescartar: (() -> Unit)? = null
+) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(tinte)
             .border(1.dp, if (tinte == Color.White) Borde else color.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-            .padding(14.dp)
+            .padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = if (alDescartar != null) 4.dp else 14.dp)
     ) {
         Icon(icono, null, tint = color, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(12.dp))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(titulo, fontWeight = FontWeight.Bold, color = if (tinte == Color.White) Color(0xFF1A1F2B) else color)
             Text(detalle, style = MaterialTheme.typography.bodySmall)
+        }
+        if (alDescartar != null) androidx.compose.material3.IconButton(onClick = alDescartar, modifier = Modifier.size(32.dp)) {
+            Icon(androidx.compose.material.icons.Icons.Default.Close, "Marcar como leída", tint = TextoSecundario, modifier = Modifier.size(18.dp))
         }
     }
 }

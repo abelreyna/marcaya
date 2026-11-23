@@ -141,6 +141,17 @@ class AdminViewModel @Inject constructor(
         }
     }
 
+    // Notificaciones que el administrador ya leyó o descartó (guardadas en el teléfono)
+    private val prefsNotif = context.getSharedPreferences(PREFS_NOTIF_LEIDAS, Context.MODE_PRIVATE)
+    val leidas = MutableStateFlow(prefsNotif.getStringSet("leidas_$adminId", emptySet()).orEmpty().toSet())
+
+    fun marcarLeidas(claves: Collection<String>) {
+        if (claves.isEmpty() || leidas.value.containsAll(claves)) return
+        val nuevas = (leidas.value + claves).let { if (it.size > 1000) it.toList().takeLast(1000).toSet() else it }
+        leidas.value = nuevas
+        prefsNotif.edit().putStringSet("leidas_$adminId", nuevas).apply()
+    }
+
     /** Colaboradores que dejaron la empresa: sus marcajes siguen saliendo en los reportes. */
     private val exColaboradores = repo.observarExColaboradores(adminId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -266,6 +277,37 @@ fun tituloAlerta(tipo: String): String = when (tipo) {
     "GPS_FALSO" -> "¡Ubicación simulada!"
     "FUERA_RANGO" -> "Marcaje fuera de la zona"
     else -> TipoIncidencia.entries.firstOrNull { it.name == tipo }?.etiqueta ?: "Alerta"
+}
+
+const val PREFS_NOTIF_LEIDAS = "notif_leidas"
+
+/** Una tarjeta del Centro de Notificaciones; agrupa una o varias claves (cada clave cuenta 1 en el contador). */
+data class Notificacion(
+    val claves: List<String>, val titulo: String, val detalle: String,
+    val grave: Boolean = false, val alertaGrave: Boolean = false, val irAIncidencias: Boolean = false
+)
+
+/** Notificaciones del administrador que aún no ha leído. */
+fun notificacionesSinLeer(u: UiAdmin, incidencias: List<Incidencia>, leidas: Set<String>): List<Notificacion> = buildList {
+    u.alertas.filter { "alerta|${it.id}" !in leidas }.forEach {
+        val grave = it.tipo == "GPS_FALSO" || it.tipo == "FUERA_RANGO"
+        add(Notificacion(listOf("alerta|${it.id}"), tituloAlerta(it.tipo), "${Fechas.horaCorta(it.creadoMillis)} · ${it.colaboradorNombre}: ${it.detalle}", grave = grave, alertaGrave = grave))
+    }
+    sinIngresoHoy(u).forEach {
+        val k = "sining|${it.uid}|${Fechas.hoy()}"
+        if (k !in leidas) add(Notificacion(listOf(k), "Aún no marca ingreso", "${it.nombre} · entrada programada ${it.horario.entrada}"))
+    }
+    val sinJustificar = incidencias.filter { it.estado == EstadoIncidencia.POR_JUSTIFICAR && "inc|${it.clave}" !in leidas }
+    if (sinJustificar.isNotEmpty()) add(Notificacion(
+        sinJustificar.map { "inc|${it.clave}" }, "Incidencias sin justificar",
+        sinJustificar.groupingBy { it.tipo.etiqueta }.eachCount().entries.joinToString(" · ") { "${it.value} ${it.key.lowercase()}" },
+        grave = true, irAIncidencias = true
+    ))
+    val pendientes = u.justificaciones.filter { it.estado == EstadoJustificacion.PENDIENTE && "just|${it.id}" !in leidas }
+    if (pendientes.isNotEmpty()) add(Notificacion(
+        pendientes.map { "just|${it.id}" }, "Justificaciones por revisar",
+        pendientes.joinToString(" · ") { it.colaboradorNombre }.let { "${pendientes.size} pendiente(s): $it" }, irAIncidencias = true
+    ))
 }
 
 /** Colaboradores que hoy deben trabajar, ya pasó su hora de entrada + tolerancia y no marcaron ingreso. */

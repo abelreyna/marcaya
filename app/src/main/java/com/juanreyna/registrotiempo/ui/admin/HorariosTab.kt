@@ -1,5 +1,7 @@
 package com.juanreyna.registrotiempo.ui.admin
 
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.size
@@ -72,12 +74,13 @@ internal fun Horario.diasTexto(): String {
 @Composable
 internal fun SelectorDias(dias: List<Int>, alCambiar: (List<Int>) -> Unit) {
     Text("Días laborables (permiten marcar ingreso)", style = MaterialTheme.typography.labelLarge, color = TextoSecundario)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    // Cada día ocupa 1/7 del ancho: el domingo (D) siempre queda visible, aun en pantallas angostas
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         listOf("L", "M", "M", "J", "V", "S", "D").forEachIndexed { idx, letra ->
             val dia = idx + 1
             val activo = dia in dias
             Box(
-                Modifier.size(38.dp).clip(CircleShape).background(if (activo) Teal else Color.White)
+                Modifier.weight(1f).aspectRatio(1f).widthIn(max = 44.dp).clip(CircleShape).background(if (activo) Teal else Color.White)
                     .border(1.dp, if (activo) Teal else Borde, CircleShape)
                     .clickable {
                         val nuevos = if (activo) dias - dia else (dias + dia).sorted()

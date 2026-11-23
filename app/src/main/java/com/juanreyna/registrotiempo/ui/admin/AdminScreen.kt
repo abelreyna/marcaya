@@ -191,6 +191,9 @@ fun AdminScreen(
     val incidencias by vm.incidencias.collectAsStateWithLifecycle()
     val admin by vm.admin.collectAsStateWithLifecycle()
     val mensaje by vm.mensaje.collectAsStateWithLifecycle()
+    val leidas by vm.leidas.collectAsStateWithLifecycle()
+    val notificaciones = notificacionesSinLeer(ui, incidencias.orEmpty(), leidas)
+    val totalSinLeer = notificaciones.sumOf { it.claves.size }
     val snackbar = remember { SnackbarHostState() }
     var pestana by rememberSaveable { mutableIntStateOf(0) }
     var verNotificaciones by remember { mutableStateOf(false) }
@@ -207,7 +210,7 @@ fun AdminScreen(
             alTocarAvatar = alPerfil,
             acciones = {
                 IconButton(onClick = { verNotificaciones = true }) {
-                    androidx.compose.material3.BadgedBox(badge = { val n = ui.alertas.size + ui.pendientes + sinIngresoHoy(ui).size; if (n > 0) androidx.compose.material3.Badge { Text("$n") } }) {
+                    androidx.compose.material3.BadgedBox(badge = { if (totalSinLeer > 0) androidx.compose.material3.Badge { Text(if (totalSinLeer > 99) "99+" else "$totalSinLeer") } }) {
                         Icon(Icons.Default.Notifications, "Notificaciones", tint = Color.White)
                     }
                 }
@@ -244,38 +247,42 @@ fun AdminScreen(
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))
     }
-    if (verNotificaciones) CentroNotificaciones(ui, incidencias.orEmpty(), alVerIncidencias = { verNotificaciones = false; pestana = 3 }) { verNotificaciones = false }
+    if (verNotificaciones) {
+        // Al cerrar el centro, todo lo que se mostró queda como leído y el contador baja a cero
+        val marcarTodo = { vm.marcarLeidas(notificaciones.flatMap { it.claves }); verNotificaciones = false }
+        CentroNotificaciones(
+            notificaciones, alDescartar = { vm.marcarLeidas(it.claves) },
+            alVerIncidencias = { marcarTodo(); pestana = 3 }, alCerrar = marcarTodo
+        )
+    }
 }
 
 /** Centro de Notificaciones: alertas en vivo, faltas, tardanzas e incidencias sin justificar. */
 @Composable
-private fun CentroNotificaciones(ui: UiAdmin, incidencias: List<com.juanreyna.registrotiempo.domain.model.Incidencia>, alVerIncidencias: () -> Unit, alCerrar: () -> Unit) {
-    val sinIngreso = sinIngresoHoy(ui)
-    val sinJustificar = incidencias.filter { it.estado == com.juanreyna.registrotiempo.domain.model.EstadoIncidencia.POR_JUSTIFICAR }
+private fun CentroNotificaciones(notificaciones: List<Notificacion>, alDescartar: (Notificacion) -> Unit, alVerIncidencias: () -> Unit, alCerrar: () -> Unit) {
     AlertDialog(
         onDismissRequest = alCerrar,
         title = { Text("Centro de Notificaciones", fontWeight = FontWeight.Bold, color = AzulMarino) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                ui.alertas.forEach {
-                    val grave = it.tipo == "GPS_FALSO" || it.tipo == "FUERA_RANGO"
-                    TarjetaAviso(if (grave) Icons.Default.Warning else Icons.Default.Notifications, tituloAlerta(it.tipo),
-                        "${Fechas.horaCorta(it.creadoMillis)} · ${it.colaboradorNombre}: ${it.detalle}", if (grave) Rojo else Ambar, if (grave) RojoTinte else Color.White)
+                notificaciones.forEach { n ->
+                    val icono = when {
+                        n.grave -> Icons.Default.Warning
+                        n.irAIncidencias -> Icons.Default.CheckBox
+                        else -> Icons.Default.Notifications
+                    }
+                    TarjetaAviso(
+                        icono, n.titulo, n.detalle,
+                        if (n.grave) Rojo else if (n.irAIncidencias) AzulMarino else Ambar,
+                        if (n.grave) RojoTinte else Color.White,
+                        alDescartar = { alDescartar(n) }
+                    )
                 }
-                sinIngreso.forEach {
-                    TarjetaAviso(Icons.Default.Notifications, "Aún no marca ingreso", "${it.nombre} · entrada programada ${it.horario.entrada}", Ambar)
-                }
-                if (sinJustificar.isNotEmpty()) TarjetaAviso(
-                    Icons.Default.Warning, "Incidencias sin justificar",
-                    sinJustificar.groupingBy { it.tipo.etiqueta }.eachCount().entries.joinToString(" · ") { "${it.value} ${it.key.lowercase()}" }, Rojo, RojoTinte
-                )
-                if (ui.pendientes > 0) TarjetaAviso(Icons.Default.CheckBox, "Justificaciones por revisar", "${ui.pendientes} pendiente(s) en Incidencias")
-                if (sinJustificar.isNotEmpty() || ui.pendientes > 0) TextButton(onClick = alVerIncidencias) { Text("Ver incidencias") }
-                if (ui.alertas.isEmpty() && ui.pendientes == 0 && sinIngreso.isEmpty() && sinJustificar.isEmpty())
-                    Text("Sin notificaciones por ahora.", color = TextoSecundario)
+                if (notificaciones.any { it.irAIncidencias }) TextButton(onClick = alVerIncidencias) { Text("Ver incidencias") }
+                if (notificaciones.isEmpty()) Text("Sin notificaciones nuevas.", color = TextoSecundario)
             }
         },
-        confirmButton = { TextButton(onClick = alCerrar) { Text("Cerrar") } }
+        confirmButton = { TextButton(onClick = alCerrar) { Text(if (notificaciones.isEmpty()) "Cerrar" else "Marcar como leídas") } }
     )
 }
 

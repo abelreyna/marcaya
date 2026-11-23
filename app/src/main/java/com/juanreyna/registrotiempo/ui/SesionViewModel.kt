@@ -190,6 +190,7 @@ class SesionViewModel @Inject constructor(
             auth.eliminarUsuario(activity)
             store.limpiar()
             getApplication<Application>().getSharedPreferences("avisos_incidencias", 0).edit().clear().apply()
+            getApplication<Application>().getSharedPreferences("notif_leidas", 0).edit().clear().apply()
         }.onSuccess {
             Toast.makeText(getApplication(), "Tu cuenta fue eliminada. Puedes volver a registrarte cuando quieras.", Toast.LENGTH_LONG).show()
             _estado.update { EstadoSesion(destino = Destino.Login) }
