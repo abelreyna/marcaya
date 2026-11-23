@@ -446,10 +446,25 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
         if (filtrados.isEmpty()) item { TextoCentrado("No hay colaboradores para mostrar.") }
         item { Spacer(Modifier.height(8.dp)) }
     }
+    var desvinculando by remember { mutableStateOf<Usuario?>(null) }
     editando?.let { u ->
-        DialogoColaborador(u, e.moneda.simbolo, alCerrar = { editando = null }) { cfg, horario, activo ->
+        DialogoColaborador(u, e.moneda.simbolo, alCerrar = { editando = null }, alDesvincular = { editando = null; desvinculando = u }) { cfg, horario, activo ->
             vm.guardarColaborador(u, cfg, horario, activo); editando = null
         }
+    }
+    desvinculando?.let { u ->
+        AlertDialog(
+            onDismissRequest = { desvinculando = null },
+            title = { Text("¿Desvincular a ${u.nombre}?", color = Rojo, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Saldrá de tu equipo y ya no podrá marcar asistencia en tu empresa. Su historial de marcajes se conserva en tus reportes. " +
+                        "Su cuenta sigue activa: podrá unirse a otra empresa o volver a la tuya con tu código."
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.desvincular(u); desvinculando = null }) { Text("Desvincular", color = Rojo) } },
+            dismissButton = { TextButton(onClick = { desvinculando = null }) { Text("Cancelar") } }
+        )
     }
 }
 
@@ -479,7 +494,7 @@ private fun ChipFiltro(texto: String, seleccionado: Boolean, onClick: () -> Unit
 }
 
 @Composable
-private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean) -> Unit) {
+private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, alDesvincular: () -> Unit, alGuardar: (ConfigPago, Horario, Boolean) -> Unit) {
     var cfg by remember { mutableStateOf(u.configPago) }
     var tarifa by remember { mutableStateOf(if (cfg.tarifaPorHora > 0) cfg.tarifaPorHora.toString() else "") }
     var sueldo by remember { mutableStateOf(if (cfg.sueldoBase > 0) cfg.sueldoBase.toString() else "") }
@@ -560,11 +575,20 @@ private fun DialogoColaborador(u: Usuario, mon: String, alCerrar: () -> Unit, al
                 )
                 Text("Para cambiar el horario de varios colaboradores a la vez usa la pestaña Horarios.",
                     style = MaterialTheme.typography.bodySmall, color = Teal)
+                HorizontalDivider(color = Borde)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ChipSimple(if (activo) "Enlace Activo" else "Desvinculado", if (activo) VerdeEsmeralda else Rojo)
-                    Spacer(Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        ChipSimple(if (activo) "Activo" else "Dado de baja", if (activo) VerdeEsmeralda else Rojo)
+                        Text(
+                            if (activo) "Apágalo para dar de baja: no podrá marcar, pero conserva su historial y puedes reactivarlo."
+                            else "No puede marcar asistencia. Enciéndelo para reactivarlo.",
+                            style = MaterialTheme.typography.bodySmall, color = TextoSecundario
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Switch(activo, { activo = it }, colors = SwitchDefaults.colors(checkedTrackColor = Teal))
                 }
+                TextButton(onClick = alDesvincular) { Text("Desvincular del equipo", color = Rojo) }
             }
         },
         confirmButton = {

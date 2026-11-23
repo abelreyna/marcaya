@@ -96,7 +96,13 @@ private fun Opcion(icono: ImageVector, texto: String, detalle: String? = null, o
 }
 
 @Composable
-fun AjustesScreen(alVolver: () -> Unit, alPerfil: () -> Unit, alAcercaDe: () -> Unit, alVip: () -> Unit, alCerrarSesion: () -> Unit) {
+fun AjustesScreen(
+    alVolver: () -> Unit, alPerfil: () -> Unit, alAcercaDe: () -> Unit, alVip: () -> Unit, alCerrarSesion: () -> Unit,
+    esAdmin: Boolean = false,
+    estado: com.juanreyna.registrotiempo.ui.EstadoSesion = com.juanreyna.registrotiempo.ui.EstadoSesion(),
+    alEliminarCuenta: () -> Unit = {}
+) {
+    var eliminar by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var confirmar by remember { mutableStateOf(false) }
     var terminos by remember { mutableStateOf(false) }
@@ -126,6 +132,17 @@ fun AjustesScreen(alVolver: () -> Unit, alPerfil: () -> Unit, alAcercaDe: () -> 
             }
             Spacer(Modifier.height(24.dp))
             BotonPill("Cerrar Sesión", { confirmar = true }, Modifier.padding(horizontal = 16.dp), color = Rojo, icono = Icons.AutoMirrored.Filled.Logout)
+            Spacer(Modifier.height(12.dp))
+            com.juanreyna.registrotiempo.ui.components.BotonPillContorno(
+                if (esAdmin) "Eliminar empresa y cuenta" else "Eliminar mi cuenta", { eliminar = true },
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp), color = Rojo
+            )
+            Text(
+                if (esAdmin) "Borra tu empresa y todos sus datos. Tus colaboradores quedan desvinculados."
+                else "Borra tu perfil. Tus marcajes quedan con tu empleador como registro de asistencia.",
+                Modifier.padding(horizontal = 24.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall,
+                color = com.juanreyna.registrotiempo.ui.theme.TextoSecundario
+            )
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -137,6 +154,10 @@ fun AjustesScreen(alVolver: () -> Unit, alPerfil: () -> Unit, alAcercaDe: () -> 
         dismissButton = { TextButton(onClick = { confirmar = false }) { Text("Cancelar") } }
     )
     if (terminos) DialogoLicencia { terminos = false }
+    if (eliminar) com.juanreyna.registrotiempo.ui.components.DialogoEliminarCuenta(
+        esAdmin = esAdmin, procesando = estado.procesando, progreso = estado.progreso, error = estado.error,
+        alConfirmar = alEliminarCuenta, alCerrar = { eliminar = false }
+    )
 }
 
 @Composable

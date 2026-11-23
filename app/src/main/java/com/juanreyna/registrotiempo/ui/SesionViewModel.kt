@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui
 
+import android.widget.Toast
 import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -30,6 +31,8 @@ sealed interface Destino {
     data object Registro : Destino
     data class Admin(val uid: String) : Destino
     data class Colaborador(val uid: String) : Destino
+    /** Colaborador sin empresa (fue desvinculado): puede vincularse con otro código o eliminar su cuenta. */
+    data class SinEmpresa(val uid: String) : Destino
 }
 
 data class EstadoSesion(
@@ -39,7 +42,9 @@ data class EstadoSesion(
     val diasRestantes: Long = 0,
     val bannerCerrado: Boolean = false,
     val error: String? = null,
-    val procesando: Boolean = false
+    val procesando: Boolean = false,
+    /** Texto de avance mientras se elimina una cuenta. */
+    val progreso: String? = null
 )
 
 /**
@@ -87,8 +92,13 @@ class SesionViewModel @Inject constructor(
     }
 
     private suspend fun irA(rol: Rol, uid: String, adminId: String) {
-        val destino = if (rol == Rol.ADMINISTRADOR) Destino.Admin(uid) else Destino.Colaborador(uid)
+        val destino = when {
+            rol == Rol.ADMINISTRADOR -> Destino.Admin(uid)
+            adminId.isBlank() -> Destino.SinEmpresa(uid)
+            else -> Destino.Colaborador(uid)
+        }
         _estado.update { it.copy(destino = destino) }
+        if (adminId.isBlank()) return
         evaluarVip(adminId)
         runCatching { FirebaseMessaging.getInstance().subscribeToTopic("empresa_$adminId") }
     }
@@ -134,6 +144,45 @@ class SesionViewModel @Inject constructor(
         runCatching { accion() }
             .onSuccess { _estado.update { it.copy(procesando = false) }; resolver() }
             .onFailure { e -> _estado.update { it.copy(procesando = false, error = e.message ?: "Error al registrar") } }
+    }
+
+    /** Colaborador sin empresa: se vincula a otra con un nuevo Código de Administrador. */
+    fun revincular(codigo: String) = registrar {
+        repo.revincularColaborador(auth.usuarioActual!!.uid, codigo)
+    }
+
+    /**
+     * Elimina la cuenta del usuario actual (pide de nuevo la cuenta de Google):
+     * - Administrador: borra la empresa y todos sus datos, desvincula al equipo y elimina su usuario.
+     * - Colaborador: borra su perfil (sus marcajes quedan para el empleador) y elimina su usuario.
+     * Después puede volver a registrarse con la misma cuenta de Google desde cero.
+     */
+    fun eliminarCuenta(activity: Activity) = viewModelScope.launch {
+        _estado.update { it.copy(procesando = true, error = null, progreso = "Confirmando tu cuenta de Google…") }
+        runCatching {
+            val u = auth.usuarioActual ?: error("No hay sesión activa")
+            auth.reautenticar(activity)
+            val perfil = repo.obtenerUsuario(u.uid)
+            if (perfil != null) {
+                if (perfil.rol == Rol.ADMINISTRADOR) {
+                    repo.eliminarEmpresa(u.uid) { p -> _estado.update { it.copy(progreso = p) } }
+                    runCatching { FirebaseMessaging.getInstance().unsubscribeFromTopic("empresa_${u.uid}") }
+                } else {
+                    _estado.update { it.copy(progreso = "Borrando tu perfil…") }
+                    repo.eliminarPerfilColaborador(perfil)
+                    if (perfil.adminId.isNotBlank()) runCatching { FirebaseMessaging.getInstance().unsubscribeFromTopic("empresa_${perfil.adminId}") }
+                }
+            }
+            _estado.update { it.copy(progreso = "Eliminando tu usuario…") }
+            auth.eliminarUsuario(activity)
+            store.limpiar()
+            getApplication<Application>().getSharedPreferences("avisos_incidencias", 0).edit().clear().apply()
+        }.onSuccess {
+            Toast.makeText(getApplication(), "Tu cuenta fue eliminada. Puedes volver a registrarte cuando quieras.", Toast.LENGTH_LONG).show()
+            _estado.update { EstadoSesion(destino = Destino.Login) }
+        }.onFailure { e ->
+            _estado.update { it.copy(procesando = false, progreso = null, error = "No se pudo eliminar la cuenta: ${e.message}") }
+        }
     }
 
     fun nombreGoogle(): String = auth.usuarioActual?.displayName.orEmpty()

@@ -65,21 +65,23 @@ class ColaboradorViewModel @Inject constructor(
     val procesando = MutableStateFlow(false)
 
     private val usuario = repo.observarUsuario(uid).stateIn(viewModelScope, SharingStarted.Eagerly, null)
-    private val empresa = usuario.filterNotNull().flatMapLatest { repo.observarEmpresa(it.adminId) }
+    private val empresa = usuario.filterNotNull().flatMapLatest { if (it.adminId.isBlank()) flowOf(null) else repo.observarEmpresa(it.adminId) }
     private val hoy = repo.observarMarcajesColaborador(uid, "fecha", Fechas.hoy())
     private val mes = mesSeleccionado.flatMapLatest { repo.observarMarcajesColaborador(uid, "mes", it) }
     private val justif = repo.observarJustificaciones("colaboradorId", uid)
     private val reloj = flow { while (true) { emit(System.currentTimeMillis()); delay(30_000) } }
 
     val ui: StateFlow<UiColaborador> = combine(usuario, empresa, hoy, mes, justif) { u, e, h, m, j ->
-        UiColaborador(u, e, h, u?.let { ResumenMensual.construir(listOf(it), m, System.currentTimeMillis()).first() }, j)
+        // Solo los datos de la empresa actual (si antes trabajó en otra, sus marcajes no se mezclan)
+        val delAdmin = { mm: List<Marcaje> -> mm.filter { it.adminId == u?.adminId } }
+        UiColaborador(u, e, delAdmin(h), u?.let { ResumenMensual.construir(listOf(it), delAdmin(m), System.currentTimeMillis()).first() }, j.filter { it.adminId == u?.adminId })
     }.combine(reloj) { estado, t -> estado.copy(ahora = t) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiColaborador())
 
     /** Incidencias del mes actual (tardanzas, faltas, etc.) con el estado de su justificación. */
     private val mesActualMarcajes = repo.observarMarcajesColaborador(uid, "mes", Fechas.mesActual())
     val incidencias: StateFlow<List<Incidencia>> = combine(usuario.filterNotNull(), mesActualMarcajes, justif, reloj) { u, ms, js, ahora ->
-        DetectorIncidencias.detectar(u, ms, js, Fechas.mesActual(), ahora)
+        DetectorIncidencias.detectar(u, ms.filter { it.adminId == u.adminId }, js.filter { it.adminId == u.adminId }, Fechas.mesActual(), ahora)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {

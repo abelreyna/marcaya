@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.navigation
 
+import com.juanreyna.registrotiempo.ui.login.SinEmpresaScreen
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ private fun rutaDe(d: Destino) = when (d) {
     Destino.Registro -> "registro"
     is Destino.Admin -> "admin/${d.uid}"
     is Destino.Colaborador -> "colaborador/${d.uid}"
+    is Destino.SinEmpresa -> "sinempresa"
 }
 
 private fun infoVip(e: EstadoSesion) = InfoVip(
@@ -79,7 +81,18 @@ fun AppNav(sesion: SesionViewModel = hiltViewModel()) {
             AdminScreen(infoVip(estado), { nav.navigate("vip") }, sesion::cerrarBanner, { nav.navigate("ajustes") }, alPerfil = { nav.navigate("perfil") })
         }
         composable("colaborador/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) {
-            ColaboradorScreen(infoVip(estado), { nav.navigate("vip") }, sesion::cerrarBanner, { nav.navigate("ajustes") }, alPerfil = { nav.navigate("perfil") })
+            ColaboradorScreen(
+                infoVip(estado), { nav.navigate("vip") }, sesion::cerrarBanner, { nav.navigate("ajustes") }, alPerfil = { nav.navigate("perfil") },
+                alQuedarSinEmpresa = { sesion.resolver() }
+            )
+        }
+        composable("sinempresa") {
+            SinEmpresaScreen(
+                estado,
+                alVincular = sesion::revincular,
+                alEliminarCuenta = { sesion.eliminarCuenta(activity) },
+                alCerrarSesion = { sesion.cerrarSesion(activity) }
+            )
         }
         composable("perfil") { PerfilScreen(alVolver = { nav.popBackStack() }) }
         composable("ajustes") {
@@ -88,7 +101,10 @@ fun AppNav(sesion: SesionViewModel = hiltViewModel()) {
                 alPerfil = { nav.navigate("perfil") },
                 alAcercaDe = { nav.navigate("acerca") },
                 alVip = { nav.navigate("vip") },
-                alCerrarSesion = { sesion.cerrarSesion(activity) }
+                alCerrarSesion = { sesion.cerrarSesion(activity) },
+                esAdmin = estado.destino is Destino.Admin,
+                estado = estado,
+                alEliminarCuenta = { sesion.eliminarCuenta(activity) }
             )
         }
         composable("acerca") { AcercaDeScreen { nav.popBackStack() } }

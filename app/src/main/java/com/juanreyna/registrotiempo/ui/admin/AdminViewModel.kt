@@ -140,6 +140,11 @@ class AdminViewModel @Inject constructor(
         }
     }
 
+    /** Colaboradores que dejaron la empresa: sus marcajes siguen saliendo en los reportes. */
+    private val exColaboradores = repo.observarExColaboradores(adminId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun desvincular(u: Usuario) = ejecutar("${u.nombre} fue desvinculado del equipo") { repo.desvincularColaborador(u) }
+
     fun guardarGeocerca(g: Geocerca) = ejecutar("Geocerca guardada") { repo.guardarGeocerca(adminId, g) }
 
     fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean) =
@@ -181,7 +186,13 @@ class AdminViewModel @Inject constructor(
         mesReporte.value = mes
         resumenMes.value = null
         runCatching { repo.marcajesEmpresaMes(adminId, mes) }
-            .onSuccess { resumenMes.value = ResumenMensual.construir(ui.value.colaboradores, it, System.currentTimeMillis()) }
+            .onSuccess { ms ->
+                // Activos + ex colaboradores que tienen marcajes en el mes (desvinculados o con cuenta eliminada)
+                val activos = ui.value.colaboradores
+                val conMarcajes = ms.map { it.colaboradorId }.toSet()
+                val ex = exColaboradores.value.filter { x -> x.uid in conMarcajes && activos.none { it.uid == x.uid } }
+                resumenMes.value = ResumenMensual.construir(activos + ex, ms, System.currentTimeMillis())
+            }
             .onFailure { mensaje.value = "No se pudo cargar el mes: ${it.message}"; resumenMes.value = emptyList() }
     }
 

@@ -145,3 +145,16 @@ fun DocumentSnapshot.aJustificacion() = Justificacion(
     creadoMillis = getTimestamp("creado", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time,
     incidencia = getString("incidencia")?.let { n -> TipoIncidencia.entries.firstOrNull { it.name == n } }
 )
+
+/** Copia de un colaborador que dejó la empresa (desvinculado o cuenta eliminada): se conserva para los reportes. */
+fun DocumentSnapshot.aExColaborador(adminId: String) = Usuario(
+    uid = id,
+    rol = Rol.COLABORADOR,
+    adminId = adminId,
+    nombre = s("nombre"),
+    correo = s("correo"),
+    dni = s("dni"),
+    activo = false,
+    horario = horarioDe(),
+    configPago = configDe(get("configPago"))
+)

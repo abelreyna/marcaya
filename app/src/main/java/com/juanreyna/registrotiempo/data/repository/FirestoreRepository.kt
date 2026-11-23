@@ -300,4 +300,86 @@ class FirestoreRepository @Inject constructor() {
             mapOf("estado" to estado.name, "resuelto" to FieldValue.serverTimestamp())
         ).await()
     }
+
+    // ---------- Bajas, desvinculación y eliminación de cuentas ----------
+
+    private fun exColaboradores(adminId: String) = empresas.document(adminId).collection("exColaboradores")
+
+    private fun copiaExColaborador(u: Usuario, motivo: String) = mapOf(
+        "nombre" to u.nombre, "dni" to u.dni, "correo" to u.correo,
+        "configPago" to u.configPago.aMapa(), "horario" to u.horario.aMapa(),
+        "motivo" to motivo, "fechaBaja" to FieldValue.serverTimestamp()
+    )
+
+    private val camposDesvinculo = mapOf(
+        "adminId" to "", "codigoVinculo" to "", "activo" to false,
+        "configPago" to FieldValue.delete(), "horario" to FieldValue.delete(), "horaIngresoEsperada" to FieldValue.delete()
+    )
+
+    /** Ex colaboradores de la empresa (para que sus marcajes sigan apareciendo en los reportes). */
+    fun observarExColaboradores(adminId: String): Flow<List<Usuario>> = callbackFlow {
+        val reg = exColaboradores(adminId).addSnapshotListener { s, _ ->
+            trySend(s?.documents?.map { it.aExColaborador(adminId) } ?: emptyList())
+        }
+        awaitClose { reg.remove() }
+    }
+
+    /** El administrador retira al colaborador del equipo: se guarda una copia y el colaborador queda libre para otra empresa. */
+    suspend fun desvincularColaborador(u: Usuario) {
+        val b = db.batch()
+        b.set(exColaboradores(u.adminId).document(u.uid), copiaExColaborador(u, "DESVINCULADO"))
+        b.update(usuarios.document(u.uid), camposDesvinculo)
+        b.commit().await()
+    }
+
+    /** Un colaborador sin empresa se vincula a otra con un nuevo Código de Administrador. */
+    suspend fun revincularColaborador(uid: String, codigo: String) {
+        val cod = codigo.trim().uppercase()
+        val adminId = codigos.document(cod).get().await().getString("adminId") ?: error("Código de Administrador no válido")
+        usuarios.document(uid).update(mapOf("adminId" to adminId, "codigoVinculo" to cod, "activo" to true)).await()
+    }
+
+    /**
+     * El colaborador elimina su cuenta: se borra su perfil (datos personales y foto).
+     * Sus marcajes y justificaciones se conservan para el empleador (registro de asistencia exigido por ley).
+     */
+    suspend fun eliminarPerfilColaborador(u: Usuario) {
+        val b = db.batch()
+        if (u.adminId.isNotBlank()) b.set(exColaboradores(u.adminId).document(u.uid), copiaExColaborador(u, "CUENTA_ELIMINADA"))
+        b.delete(usuarios.document(u.uid))
+        b.commit().await()
+    }
+
+    /**
+     * El administrador elimina su empresa: desvincula a todo el equipo y borra marcajes, justificaciones,
+     * alertas, ex colaboradores, el código, la empresa y su perfil.
+     */
+    suspend fun eliminarEmpresa(adminId: String, progreso: (String) -> Unit = {}) {
+        // Las reglas solo permiten borrar asistencia de una empresa marcada en eliminación
+        empresas.document(adminId).update("eliminando", true).await()
+        progreso("Desvinculando colaboradores…")
+        usuarios.whereEqualTo("adminId", adminId).whereEqualTo("rol", Rol.COLABORADOR.name).get().await()
+            .documents.chunked(400).forEach { lote ->
+                val b = db.batch(); lote.forEach { b.update(it.reference, camposDesvinculo) }; b.commit().await()
+            }
+        progreso("Borrando marcajes…"); borrarConsulta(marcajes.whereEqualTo("adminId", adminId))
+        progreso("Borrando justificaciones…"); borrarConsulta(justificaciones.whereEqualTo("adminId", adminId))
+        progreso("Borrando alertas…"); borrarConsulta(db.collection("alertas").whereEqualTo("adminId", adminId))
+        borrarConsulta(exColaboradores(adminId))
+        progreso("Borrando empresa…")
+        val codigo = empresas.document(adminId).get().await().getString("codigoAdministrador")
+        val b = db.batch()
+        if (!codigo.isNullOrBlank()) b.delete(codigos.document(codigo))
+        b.delete(empresas.document(adminId))
+        b.delete(usuarios.document(adminId))
+        b.commit().await()
+    }
+
+    private suspend fun borrarConsulta(q: com.google.firebase.firestore.Query) {
+        while (true) {
+            val docs = q.limit(400).get().await().documents
+            if (docs.isEmpty()) return
+            val b = db.batch(); docs.forEach { b.delete(it.reference) }; b.commit().await()
+        }
+    }
 }
