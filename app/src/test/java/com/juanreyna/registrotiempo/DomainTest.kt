@@ -129,6 +129,34 @@ class DomainTest {
         assertTrue(f.tardanzas < 0 && f.afpComision > 0 && f.cts > 0)
     }
 
+    @Test fun descuentosDelEmpleador_restanDelNetoYNoDeLaBaseDeAportes() {
+        val d = { id: String, fecha: String, monto: Double -> com.juanreyna.registrotiempo.domain.model.Descuento(
+            id = id, colaboradorId = "a", adminId = "adm", concepto = "Adelanto", motivo = "x", monto = monto, fecha = fecha, mes = fecha.take(7)) }
+        // Modo Simple: 8 h × 10 = 80; descuento de 15 el mismo mes y otro de otro mes (se ignora)
+        val simple = Usuario(uid = "a", nombre = "Ana", configPago = ConfigPago(tarifaPorHora = 10.0))
+        val ms = listOf(
+            Marcaje(colaboradorId = "a", tipo = TipoMarcaje.INGRESO, timestampMillis = 0L, fecha = "2026-11-02", mes = "2026-11", dentroGeocerca = true, validacionFacial = true),
+            Marcaje(colaboradorId = "a", tipo = TipoMarcaje.SALIDA, timestampMillis = 8 * h, fecha = "2026-11-02", mes = "2026-11", dentroGeocerca = true)
+        )
+        val sinDesc = ResumenMensual.construir(listOf(simple), ms, 9 * h, "2026-11").first()
+        val r = ResumenMensual.construir(listOf(simple), ms, 9 * h, "2026-11",
+            descuentos = listOf(d("1", "2026-11-02", 15.0), d("2", "2026-10-30", 50.0))).first()
+        assertEquals(sinDesc.boleta.netoAPagar - 15.0, r.boleta.netoAPagar, 0.001)
+        assertEquals(1, r.descuentos.size)
+        assertEquals(15.0, r.descuentosDel("2026-11-02").sumOf { it.monto }, 0.0)
+        assertTrue(r.boleta.descuentos.last().concepto == "Descuento: Adelanto (02/11)")
+        // Modo Avanzado: EsSalud y costo no cambian; la planilla lo muestra en "Otros descuentos"
+        val cfg = ConfigPago(modo = ModoPago.AVANZADO, sueldoBase = 2000.0, apellidoPaterno = "P", nombres = "N")
+        val b = PlanillaPeruCalculator.calcularDias(cfg, List(26) { HorasDia(8.0, 0.0) }, nov26)
+        val conD = ResumenMensual.conDescuentos(b, listOf(d("3", "2026-11-05", 100.0)))
+        assertEquals(b.netoAPagar - 100.0, conD.netoAPagar, 0.001)
+        assertEquals(b.costoEmpleador, conD.costoEmpleador, 0.0)
+        val f = com.juanreyna.registrotiempo.domain.calc.PlanillaAvanzada.fila(1,
+            com.juanreyna.registrotiempo.domain.calc.ResumenColaborador(Usuario(uid = "a", nombre = "x", configPago = cfg), emptyList(), conD))
+        assertEquals(100.0, f.otrosDescuentos, 0.0)
+        assertEquals(conD.totalDescuentos, f.onp + f.afpFondo + f.afpPrima + f.afpComision + f.quinta + f.otrosDescuentos, 0.001)
+    }
+
     @Test fun parametros_vigentesPorMes() {
         assertEquals(1230.0, nov26.rmv, 0.0)
         assertEquals(5500.0, nov26.uit, 0.0)

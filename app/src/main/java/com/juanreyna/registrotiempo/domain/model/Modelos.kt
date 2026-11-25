@@ -250,6 +250,26 @@ data class Justificacion(
     val incidencia: TipoIncidencia? = null
 )
 
+/**
+ * Descuento que el empleador aplica a un colaborador en un día concreto (p. ej. adelanto, daño de material, faltante de caja).
+ * Se resta del pago de ese día y del neto del mes. El colaborador solo lo ve: no puede modificarlo.
+ */
+data class Descuento(
+    val id: String = "",
+    val colaboradorId: String = "",
+    val colaboradorNombre: String = "",
+    val adminId: String = "",
+    /** Nombre corto del descuento ("Adelanto de sueldo"). */
+    val concepto: String = "",
+    /** Motivo o explicación para el colaborador. */
+    val motivo: String = "",
+    val monto: Double = 0.0,
+    /** Día al que se aplica, "yyyy-MM-dd". */
+    val fecha: String = "",
+    val mes: String = "",
+    val creadoMillis: Long? = null
+)
+
 /** Incidencia detectada en un día, con el estado de su justificación. */
 data class Incidencia(
     val colaboradorId: String,

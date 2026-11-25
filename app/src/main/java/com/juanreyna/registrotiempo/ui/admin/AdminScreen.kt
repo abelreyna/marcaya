@@ -410,6 +410,7 @@ internal fun Contador(titulo: String, valor: Int, fondo: Color, color: Color, mo
 
 @Composable
 private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
+    val descuentos by vm.descuentos.collectAsStateWithLifecycle()
     var editando by remember { mutableStateOf<Usuario?>(null) }
     var busqueda by rememberSaveable { mutableStateOf("") }
     val e = ui.empresa!!
@@ -426,6 +427,13 @@ private fun PestanaEquipo(vm: AdminViewModel, ui: UiAdmin) {
                 }
                 BotonPill("Aplicar a todo el equipo", { vm.aplicarModoGlobal(modoGlobal, moneda.name) }, alto = 46.dp)
             }
+        }
+        item {
+            SeccionDescuentos(
+                descuentos, ui.colaboradores.filter { it.activo }, e.moneda.simbolo,
+                alAplicar = { u, concepto, motivo, monto, fecha -> vm.aplicarDescuento(u, concepto, motivo, monto, fecha) },
+                alAnular = { vm.anularDescuento(it) }
+            )
         }
         item {
             OutlinedTextField(

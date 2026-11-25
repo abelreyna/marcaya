@@ -17,6 +17,7 @@ import com.juanreyna.registrotiempo.data.repository.FirestoreRepository
 import com.juanreyna.registrotiempo.domain.calc.JornadaCalculator
 import com.juanreyna.registrotiempo.domain.calc.ResumenColaborador
 import com.juanreyna.registrotiempo.domain.calc.ResumenMensual
+import com.juanreyna.registrotiempo.domain.model.Descuento
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.Justificacion
 import com.juanreyna.registrotiempo.domain.model.Marcaje
@@ -48,6 +49,8 @@ data class UiColaborador(
     val marcajesHoy: List<Marcaje> = emptyList(),
     val resumenMes: ResumenColaborador? = null,
     val justificaciones: List<Justificacion> = emptyList(),
+    /** Descuentos que le aplicó su empleador (empresa actual, todos los meses). */
+    val descuentos: List<Descuento> = emptyList(),
     val ahora: Long = System.currentTimeMillis()
 )
 
@@ -75,6 +78,7 @@ class ColaboradorViewModel @Inject constructor(
     private val mes = mesSeleccionado.flatMapLatest { repo.observarMarcajesColaborador(uid, "mes", it) }
     private val justif = repo.observarJustificaciones("colaboradorId", uid)
     private val reloj = flow { while (true) { emit(System.currentTimeMillis()); delay(30_000) } }
+    private val descuentos = repo.observarDescuentos("colaboradorId", uid)
 
     val ui: StateFlow<UiColaborador> = combine(usuario, empresa, hoy, mes, justif) { u, e, h, m, j ->
         // Solo los datos de la empresa actual (si antes trabajó en otra, sus marcajes no se mezclan)
@@ -82,6 +86,16 @@ class ColaboradorViewModel @Inject constructor(
         UiColaborador(u, e, delAdmin(h), u?.let { ResumenMensual.construir(
             listOf(it), delAdmin(m), System.currentTimeMillis(), mesSeleccionado.value, j.filter { x -> x.adminId == it.adminId }
         ).first() }, j.filter { it.adminId == u?.adminId })
+    }.combine(descuentos) { estado, ds ->
+        val propios = ds.filter { it.adminId == estado.usuario?.adminId }
+        val r = estado.resumenMes
+        estado.copy(
+            descuentos = propios,
+            resumenMes = r?.let {
+                val delMes = propios.filter { d -> d.mes == mesSeleccionado.value }.sortedBy { d -> d.fecha }
+                it.copy(boleta = ResumenMensual.conDescuentos(it.boleta, delMes), descuentos = delMes)
+            }
+        )
     }.combine(reloj) { estado, t -> estado.copy(ahora = t) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiColaborador())
 
@@ -92,6 +106,18 @@ class ColaboradorViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
+        // Notificación del sistema por cada descuento que aplica el empleador
+        viewModelScope.launch {
+            combine(usuario.filterNotNull(), empresa, descuentos) { u, e, ds -> Triple(u, e, ds.filter { it.adminId == u.adminId }) }.collect { (_, e, ds) ->
+                val mon = e?.moneda?.simbolo ?: "S/"
+                AvisosIncidencias.notificarNuevos(context, "desc_$uid", ds.map { d ->
+                    AvisosIncidencias.Aviso(
+                        "desc|${d.id}", "Descuento aplicado: ${d.concepto}",
+                        "−$mon ${"%,.2f".format(d.monto)} el ${Fechas.fechaCorta(d.fecha)} · ${d.motivo}"
+                    )
+                }, registrarSiVacio = true)
+            }
+        }
         // Notificación del sistema por cada incidencia nueva o justificación resuelta
         viewModelScope.launch {
             incidencias.collect { lista ->

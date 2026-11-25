@@ -4,6 +4,7 @@ import com.juanreyna.registrotiempo.domain.model.TipoIncidencia
 import com.juanreyna.registrotiempo.domain.model.EstadoIncidencia
 import com.juanreyna.registrotiempo.domain.model.ModoPago
 import com.juanreyna.registrotiempo.domain.model.Justificacion
+import com.juanreyna.registrotiempo.domain.model.Descuento
 import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.domain.model.Marcaje
 import com.juanreyna.registrotiempo.domain.model.TipoMarcaje
@@ -31,8 +32,12 @@ data class DiaTrabajado(
 data class ResumenColaborador(
     val usuario: Usuario,
     val dias: List<DiaTrabajado>,
-    val boleta: Boleta
+    val boleta: Boleta,
+    /** Descuentos aplicados por el empleador en el mes (ya restados en la boleta). */
+    val descuentos: List<Descuento> = emptyList()
 ) {
+    val totalDescuentosEmpleador get() = descuentos.sumOf { it.monto }.r2()
+    fun descuentosDel(fecha: String) = descuentos.filter { it.fecha == fecha }
     val horasTotales get() = dias.sumOf { it.minutosEfectivos } / 60.0
     val tardanzas get() = dias.count { it.tardanza }
     val minutosExtra get() = dias.sumOf { it.minutosExtra }
@@ -74,20 +79,33 @@ object ResumenMensual {
         ahoraMillis: Long,
         mes: String = marcajesMes.firstOrNull()?.mes?.ifBlank { null } ?: Fechas.mesActual(),
         justificaciones: List<Justificacion> = emptyList(),
-        parametros: ParametrosLegales = ParametrosLegales.delMes(mes)
+        parametros: ParametrosLegales = ParametrosLegales.delMes(mes),
+        descuentos: List<Descuento> = emptyList()
     ): List<ResumenColaborador> {
         val porColaborador = marcajesMes.groupBy { it.colaboradorId }
+        val descPorColaborador = descuentos.filter { it.mes == mes }.groupBy { it.colaboradorId }
         return colaboradores.map { u ->
             val propios = porColaborador[u.uid].orEmpty()
             val dias = diasDe(propios, ahoraMillis, u.horario)
             val periodo = if (u.configPago.modo == ModoPago.AVANZADO) periodoDe(u, propios, justificaciones, mes, ahoraMillis) else PeriodoPlanilla()
+            val propiosDesc = descPorColaborador[u.uid].orEmpty().sortedBy { it.fecha }
             ResumenColaborador(
                 usuario = u,
                 dias = dias,
-                boleta = PlanillaPeruCalculator.calcularDias(u.configPago, dias.map { it.horas }, parametros, periodo)
+                boleta = conDescuentos(PlanillaPeruCalculator.calcularDias(u.configPago, dias.map { it.horas }, parametros, periodo), propiosDesc),
+                descuentos = propiosDesc
             )
         }
     }
+
+    /** Agrega a la boleta los descuentos del empleador como líneas "Descuento: concepto (dd/MM)": reducen el neto, no la base de aportes. */
+    fun conDescuentos(b: Boleta, descuentos: List<Descuento>): Boleta =
+        if (descuentos.isEmpty()) b
+        else b.copy(descuentos = b.descuentos + descuentos.map {
+            LineaBoleta("$PREFIJO_DESCUENTO${it.concepto} (${it.fecha.takeLast(2)}/${it.fecha.substring(5, 7)})", it.monto)
+        })
+
+    const val PREFIJO_DESCUENTO = "Descuento: "
 
     /**
      * Días computables desde la fecha de ingreso, faltas y minutos de tardanza no justificados del mes.

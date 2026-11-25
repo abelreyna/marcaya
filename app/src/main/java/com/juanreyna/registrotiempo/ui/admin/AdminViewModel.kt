@@ -20,6 +20,7 @@ import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
 import com.juanreyna.registrotiempo.domain.calc.ResumenMensual
 import com.juanreyna.registrotiempo.domain.model.Alerta
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
+import com.juanreyna.registrotiempo.domain.model.Descuento
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.EstadoColaborador
 import com.juanreyna.registrotiempo.domain.model.EstadoJustificacion
@@ -151,6 +152,24 @@ class AdminViewModel @Inject constructor(
         prefsNotif.edit().putStringSet("leidas_$adminId", nuevas).apply()
     }
 
+    /** Descuentos aplicados por el empleador (todos los meses, del más reciente al más antiguo). */
+    val descuentos: StateFlow<List<Descuento>> = repo.observarDescuentos("adminId", adminId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Aplica un descuento a un colaborador en la fecha indicada; el colaborador lo verá como notificación. */
+    fun aplicarDescuento(u: Usuario, concepto: String, motivo: String, monto: Double, fecha: String) =
+        ejecutar("Descuento de ${dineroTexto(monto)} aplicado a ${u.nombre}") {
+            repo.aplicarDescuento(adminId, u, concepto, motivo, monto, fecha)
+            if (resumenMes.value != null && fecha.take(7) == mesReporte.value) cargarMes()
+        }
+
+    fun anularDescuento(d: Descuento) = ejecutar("Descuento anulado") {
+        repo.anularDescuento(d.id)
+        if (resumenMes.value != null && d.mes == mesReporte.value) cargarMes()
+    }
+
+    private fun dineroTexto(monto: Double) = "${ui.value.empresa?.moneda?.simbolo ?: "S/"} %,.2f".format(monto)
+
     /** Colaboradores que dejaron la empresa: sus marcajes siguen saliendo en los reportes. */
     private val exColaboradores = repo.observarExColaboradores(adminId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -231,13 +250,13 @@ class AdminViewModel @Inject constructor(
     fun cargarMes(mes: String = mesReporte.value) = viewModelScope.launch {
         mesReporte.value = mes
         resumenMes.value = null
-        runCatching { repo.marcajesEmpresaMes(adminId, mes) }
-            .onSuccess { ms ->
+        runCatching { repo.marcajesEmpresaMes(adminId, mes) to repo.descuentosEmpresaMes(adminId, mes) }
+            .onSuccess { (ms, desc) ->
                 // Activos + ex colaboradores que tienen marcajes en el mes (desvinculados o con cuenta eliminada)
                 val activos = ui.value.colaboradores
-                val conMarcajes = ms.map { it.colaboradorId }.toSet()
+                val conMarcajes = ms.map { it.colaboradorId }.toSet() + desc.map { it.colaboradorId }
                 val ex = exColaboradores.value.filter { x -> x.uid in conMarcajes && activos.none { it.uid == x.uid } }
-                resumenMes.value = ResumenMensual.construir(activos + ex, ms, System.currentTimeMillis(), mes, ui.value.justificaciones)
+                resumenMes.value = ResumenMensual.construir(activos + ex, ms, System.currentTimeMillis(), mes, ui.value.justificaciones, descuentos = desc)
             }
             .onFailure { mensaje.value = "No se pudo cargar el mes: ${it.message}"; resumenMes.value = emptyList() }
     }

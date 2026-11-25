@@ -27,6 +27,8 @@ data class FilaPlanilla(
     val afpPrima: Double,
     val afpComision: Double,
     val quinta: Double,
+    /** Descuentos aplicados por el empleador (adelantos, daños, etc.). */
+    val otrosDescuentos: Double = 0.0,
     val essalud: Double,
     val gratificacion: Double,
     val bonificacion: Double,
@@ -86,6 +88,7 @@ object PlanillaAvanzada {
             afpPrima = linea("Prima de seguro"),
             afpComision = linea("Comisión sobre flujo"),
             quinta = linea("Renta de 5.ª"),
+            otrosDescuentos = b.descuentos.filter { it.concepto.startsWith(ResumenMensual.PREFIJO_DESCUENTO) }.sumOf { it.monto }.r2(),
             essalud = linea("EsSalud"),
             gratificacion = linea("Provisión gratificación"),
             bonificacion = linea("Provisión bonificación"),

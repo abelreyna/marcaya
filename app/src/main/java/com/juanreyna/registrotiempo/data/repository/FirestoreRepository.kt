@@ -10,6 +10,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.juanreyna.registrotiempo.domain.model.Alerta
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
+import com.juanreyna.registrotiempo.domain.model.Descuento
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.EstadoJustificacion
 import com.juanreyna.registrotiempo.domain.model.Geocerca
@@ -43,6 +44,7 @@ class FirestoreRepository @Inject constructor() {
     private val codigos get() = db.collection("codigos")
     private val marcajes get() = db.collection("marcajes")
     private val justificaciones get() = db.collection("justificaciones")
+    private val descuentos get() = db.collection("descuentos")
 
     // ---------- Perfiles ----------
     suspend fun obtenerUsuario(uid: String): Usuario? =
@@ -339,6 +341,49 @@ class FirestoreRepository @Inject constructor() {
         ).await()
     }
 
+    // ---------- Descuentos aplicados por el empleador ----------
+    /** El empleador aplica un descuento a un colaborador de su equipo en un día concreto. */
+    suspend fun aplicarDescuento(adminUid: String, colaborador: Usuario, concepto: String, motivo: String, monto: Double, fecha: String) {
+        require(concepto.isNotBlank()) { "Escribe el nombre del descuento" }
+        require(motivo.isNotBlank()) { "Escribe el motivo del descuento" }
+        require(monto > 0 && monto <= 100_000) { "El monto debe ser mayor a 0" }
+        require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(fecha)) { "Fecha no válida" }
+        descuentos.add(
+            mapOf(
+                "colaboradorId" to colaborador.uid,
+                "colaboradorNombre" to colaborador.nombre,
+                "adminId" to colaborador.adminId,
+                "concepto" to concepto.trim(),
+                "motivo" to motivo.trim(),
+                "monto" to java.math.BigDecimal.valueOf(monto).setScale(2, java.math.RoundingMode.HALF_UP).toDouble(),
+                "fecha" to fecha,
+                "mes" to fecha.take(7),
+                "aplicadoPor" to adminUid,
+                "creado" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }
+
+    /** Descuentos de una empresa ("adminId") o de un colaborador ("colaboradorId"), del más reciente al más antiguo. */
+    fun observarDescuentos(campo: String, valor: String): Flow<List<Descuento>> = callbackFlow {
+        val reg = descuentos.whereEqualTo(campo, valor).addSnapshotListener { s, _ ->
+            trySend(
+                s?.documents?.map { it.aDescuento() }
+                    ?.sortedWith(compareByDescending<Descuento> { it.fecha }.thenByDescending { it.creadoMillis ?: Long.MAX_VALUE })
+                    ?: emptyList()
+            )
+        }
+        awaitClose { reg.remove() }
+    }
+
+    suspend fun descuentosEmpresaMes(adminId: String, mes: String): List<Descuento> =
+        descuentos.whereEqualTo("adminId", adminId).whereEqualTo("mes", mes).get().await().documents.map { it.aDescuento() }
+
+    /** El empleador anula (borra) un descuento aplicado por error. */
+    suspend fun anularDescuento(id: String) {
+        descuentos.document(id).delete().await()
+    }
+
     // ---------- Bajas, desvinculación y eliminación de cuentas ----------
 
     private fun exColaboradores(adminId: String) = empresas.document(adminId).collection("exColaboradores")
@@ -403,6 +448,7 @@ class FirestoreRepository @Inject constructor() {
         progreso("Borrando marcajes…"); borrarConsulta(marcajes.whereEqualTo("adminId", adminId))
         progreso("Borrando justificaciones…"); borrarConsulta(justificaciones.whereEqualTo("adminId", adminId))
         progreso("Borrando alertas…"); borrarConsulta(db.collection("alertas").whereEqualTo("adminId", adminId))
+        progreso("Borrando descuentos…"); borrarConsulta(descuentos.whereEqualTo("adminId", adminId))
         borrarConsulta(exColaboradores(adminId))
         progreso("Borrando empresa…")
         val codigo = empresas.document(adminId).get().await().getString("codigoAdministrador")
@@ -430,6 +476,7 @@ class FirestoreRepository @Inject constructor() {
         borrarConsulta(marcajes.whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", u.uid))
         borrarConsulta(justificaciones.whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", u.uid))
         borrarConsulta(db.collection("alertas").whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", u.uid))
+        borrarConsulta(descuentos.whereEqualTo("adminId", adminId).whereEqualTo("colaboradorId", u.uid))
         exColaboradores(adminId).document(u.uid).delete().await()
     }
 

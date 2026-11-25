@@ -190,6 +190,30 @@ service cloud.firestore {
       allow delete: if empresaEnEliminacion(resource.data.adminId) || deExColaborador(resource.data);
     }
 
+    // ---------- Descuentos aplicados por el empleador ----------
+    // Solo el administrador de la empresa los crea (a un colaborador de su equipo) o los anula;
+    // el colaborador únicamente puede leer los suyos.
+    match /descuentos/{id} {
+      allow read: if isAuthenticated() && (
+        resource.data.colaboradorId == request.auth.uid ||
+        isAdminOfCompany(resource.data.adminId)
+      );
+      allow create: if isAdminOfCompany(request.resource.data.adminId)
+        && request.resource.data.aplicadoPor == request.auth.uid
+        && request.resource.data.monto is number
+        && request.resource.data.monto > 0
+        && request.resource.data.concepto is string
+        && request.resource.data.concepto.size() > 0
+        && request.resource.data.concepto.size() <= 80
+        && request.resource.data.motivo is string
+        && request.resource.data.motivo.size() <= 300
+        && request.resource.data.creado == request.time
+        && get(/databases/$(database)/documents/usuarios/$(request.resource.data.colaboradorId)).data.adminId
+           == request.resource.data.adminId;
+      allow update: if false;
+      allow delete: if isAdminOfCompany(resource.data.adminId);
+    }
+
     // ---------- Alertas antifraude / geocerca ----------
     match /alertas/{id} {
       allow read: if isAdminOfCompany(resource.data.adminId);

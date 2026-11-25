@@ -5,6 +5,7 @@ import com.juanreyna.registrotiempo.domain.model.TipoDocumento
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.juanreyna.registrotiempo.domain.model.ConfigPago
+import com.juanreyna.registrotiempo.domain.model.Descuento
 import com.juanreyna.registrotiempo.domain.model.Empresa
 import com.juanreyna.registrotiempo.domain.model.EstadoJustificacion
 import com.juanreyna.registrotiempo.domain.model.Geocerca
@@ -175,6 +176,19 @@ fun DocumentSnapshot.aJustificacion() = Justificacion(
     estado = enumDe(get("estado"), EstadoJustificacion.PENDIENTE),
     creadoMillis = getTimestamp("creado", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time,
     incidencia = getString("incidencia")?.let { n -> TipoIncidencia.entries.firstOrNull { it.name == n } }
+)
+
+fun DocumentSnapshot.aDescuento() = Descuento(
+    id = id,
+    colaboradorId = s("colaboradorId"),
+    colaboradorNombre = s("colaboradorNombre"),
+    adminId = s("adminId"),
+    concepto = s("concepto"),
+    motivo = s("motivo"),
+    monto = getDouble("monto") ?: 0.0,
+    fecha = s("fecha"),
+    mes = s("mes"),
+    creadoMillis = getTimestamp("creado", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.toDate()?.time
 )
 
 /** Copia de un colaborador que dejó la empresa (desvinculado o cuenta eliminada): se conserva para los reportes. */

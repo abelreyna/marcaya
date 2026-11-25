@@ -269,15 +269,15 @@ object PlanillaPdf {
                 Doc.Col("N°", 2.2f, CT), Doc.Col("Apellidos y nombres", 15f, L), Doc.Col("Remuneración básica", 6f), Doc.Col("Asig. familiar", 5f),
                 Doc.Col("H.E. 25%", 5f), Doc.Col("H.E. 35%", 5f), Doc.Col("(−) Tardanzas", 5f), Doc.Col("TOTAL INGRESOS", 6.4f),
                 Doc.Col("ONP 13%", 5f), Doc.Col("AFP fondo 10%", 5.4f), Doc.Col("AFP prima seguro", 5.4f), Doc.Col("AFP comisión", 5f),
-                Doc.Col("Renta 5.ª cat.", 5f), Doc.Col("TOTAL DESCUENTOS", 6.4f), Doc.Col("NETO A PAGAR", 6.6f)
+                Doc.Col("Renta 5.ª cat.", 5f), Doc.Col("Otros desc.", 5f), Doc.Col("TOTAL DESCUENTOS", 6.4f), Doc.Col("NETO A PAGAR", 6.6f)
             ),
             filas.map { f ->
                 listOf("${f.numero}", f.nombre, m(f.basica), mz(f.asignacionFamiliar), mz(f.extras25), mz(f.extras35), mz(f.tardanzas), m(f.ingresos),
-                    mz(f.onp), mz(f.afpFondo), mz(f.afpPrima), mz(f.afpComision), mz(f.quinta), m(f.descuentos), m(f.neto))
+                    mz(f.onp), mz(f.afpFondo), mz(f.afpPrima), mz(f.afpComision), mz(f.quinta), mz(f.otrosDescuentos), m(f.descuentos), m(f.neto))
             },
             listOf("", "TOTALES") + listOf<(FilaPlanilla) -> Double>(
                 { it.basica }, { it.asignacionFamiliar }, { it.extras25 }, { it.extras35 }, { it.tardanzas }, { it.ingresos },
-                { it.onp }, { it.afpFondo }, { it.afpPrima }, { it.afpComision }, { it.quinta }, { it.descuentos }, { it.neto }
+                { it.onp }, { it.afpFondo }, { it.afpPrima }, { it.afpComision }, { it.quinta }, { it.otrosDescuentos }, { it.descuentos }, { it.neto }
             ).map { sel -> m(filas.sumOf(sel)) },
             horizontal = H
         )
@@ -307,6 +307,7 @@ object PlanillaPdf {
             "Total descuentos ONP (a declarar en el PLAME)" to filas.sumOf { it.onp },
             "Total descuentos AFP (a pagar en AFPnet)" to filas.sumOf { it.afpFondo + it.afpPrima + it.afpComision },
             "Total retención de renta de 5.ª categoría" to filas.sumOf { it.quinta },
+            "Total otros descuentos aplicados por el empleador" to filas.sumOf { it.otrosDescuentos },
             "TOTAL NETO A ABONAR EN CUENTAS SUELDO" to filas.sumOf { it.neto },
             "Total aportes del empleador (EsSalud)" to filas.sumOf { it.aportes },
             "Total provisiones (gratificación, bonificación, CTS y vacaciones)" to filas.sumOf { it.provisiones },

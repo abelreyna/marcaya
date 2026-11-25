@@ -33,6 +33,8 @@ object Fechas {
         val n = c.getActualMaximum(Calendar.DAY_OF_MONTH)
         (1..n).map { "$mes-%02d".format(it) }
     }.getOrDefault(emptyList())
+    /** "2026-11-24" → "24/11/2026". */
+    fun fechaCorta(fecha: String): String = fecha.split("-").takeIf { it.size == 3 }?.let { "${it[2]}/${it[1]}/${it[0]}" } ?: fecha
     fun mesActual(): String = fmt("yyyy-MM").format(Date())
     fun hora(millis: Long?): String = millis?.let { fmt("HH:mm:ss").format(Date(it)) } ?: "--:--"
     fun fechaLarga(millis: Long): String = fmt("EEEE d 'de' MMMM, yyyy").format(Date(millis))

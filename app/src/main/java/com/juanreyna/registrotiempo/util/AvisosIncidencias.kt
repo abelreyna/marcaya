@@ -15,10 +15,14 @@ object AvisosIncidencias {
     private const val PREFS = "avisos_incidencias"
     private const val MAX = 400
 
-    fun notificarNuevos(context: Context, usuarioId: String, avisos: List<Aviso>) {
-        if (avisos.isEmpty()) return
+    /** @param registrarSiVacio con una lista vacía igual marca el inicio, para que el primer aviso real sí se notifique. */
+    fun notificarNuevos(context: Context, usuarioId: String, avisos: List<Aviso>, registrarSiVacio: Boolean = false) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val k = "vistos_$usuarioId"
+        if (avisos.isEmpty()) {
+            if (registrarSiVacio && !prefs.contains(k)) prefs.edit().putStringSet(k, emptySet()).apply()
+            return
+        }
         val primeraVez = !prefs.contains(k)
         val vistos = prefs.getStringSet(k, emptySet()).orEmpty().toMutableSet()
         val nuevos = avisos.filter { it.clave !in vistos }

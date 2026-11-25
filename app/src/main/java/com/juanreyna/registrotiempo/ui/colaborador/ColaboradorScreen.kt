@@ -1,5 +1,6 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import androidx.compose.material.icons.filled.MoneyOff
 import androidx.compose.material.icons.filled.TableChart
 import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
 import com.juanreyna.registrotiempo.ui.admin.diasTexto
@@ -234,10 +235,22 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
     val diaLaborable = ui.usuario.horario.trabajaEl(Fechas.diaSemanaIso(Fechas.hoy()))
     val activo = { t: TipoMarcaje -> !procesando && !bloqueado && t in permitidos && (t != TipoMarcaje.INGRESO || diaLaborable) }
     val valorHora = cfg.valorHora
-    val pagoHoy = resumenHoy.horasEfectivas * valorHora
+    val descuentosHoy = ui.descuentos.filter { it.fecha == Fechas.hoy() }
+    val totalDescHoy = descuentosHoy.sumOf { it.monto }
+    val brutoHoy = resumenHoy.horasEfectivas * valorHora
+    val pagoHoy = brutoHoy - totalDescHoy
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (porJustificar > 0) AvisoIncidencias(porJustificar, alJustificar)
+        // Descuentos aplicados por el empleador en los últimos 7 días (solo lectura)
+        val hace7 = Fechas.fechaDe(ui.ahora - 7L * 24 * 60 * 60 * 1000)
+        ui.descuentos.filter { it.fecha >= hace7 }.take(3).forEach { d ->
+            TarjetaAviso(
+                Icons.Default.MoneyOff, "Descuento aplicado: ${d.concepto} (−${dinero(mon, d.monto)})",
+                "${if (d.fecha == Fechas.hoy()) "Hoy" else Fechas.fechaCorta(d.fecha)} · ${d.motivo}\nAplicado por tu empleador.",
+                color = Rojo, tinte = RojoTinte
+            )
+        }
         if (!diaLaborable && ui.marcajesHoy.isEmpty()) TarjetaAviso(
             Icons.Default.EventBusy, "Hoy no es día laborable",
             "Tu horario es ${ui.usuario.horario.diasTexto()}. Si te toca trabajar hoy, pide a tu administrador que habilite este día.", Ambar
@@ -300,9 +313,13 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
             ) {
                 Text("Total acumulado hoy:", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(dinero(mon, pagoHoy), color = Color.White, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                if (totalDescHoy > 0) Text(
+                    "${dinero(mon, brutoHoy)} ganado − ${dinero(mon, totalDescHoy)} de descuento",
+                    color = Color.White, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold
+                )
                 Text(
                     when {
-                        cfg.modo == ModoPago.SIMPLE -> "(sin descuentos, ${dinero(mon, valorHora)} por hora)"
+                        cfg.modo == ModoPago.SIMPLE -> "(${dinero(mon, valorHora)} por hora${if (totalDescHoy > 0) "" else ", sin descuentos"})"
                         cfg.pagoPorHora -> "(bruto, ${dinero(mon, valorHora)} por hora)"
                         else -> "(bruto, ${dinero(mon, valorHora)} por hora = sueldo ÷ 240)"
                     },
@@ -382,6 +399,7 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
         items(r.dias.reversed()) { d ->
             val (ds, dn, mm) = Fechas.partesFecha(d.fecha)
             val valorHora = r.usuario.configPago.valorHora
+            val descDia = r.descuentosDel(d.fecha)
             Seccion(borde = Borde) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     InsigniaFecha(ds, dn, mm)
@@ -390,7 +408,7 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
                         Text("%dh %02dm".format(d.minutosEfectivos / 60, d.minutosEfectivos % 60), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text("${Fechas.horaCorta(d.ingreso)} - ${Fechas.horaCorta(d.salida)}", style = MaterialTheme.typography.bodySmall)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Pago: ${dinero(mon, d.minutosEfectivos / 60.0 * valorHora)}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text("Pago: ${dinero(mon, d.minutosEfectivos / 60.0 * valorHora - descDia.sumOf { it.monto })}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                             when {
                                 d.fueraRango -> ChipSimple("Fuera de geocerca", Rojo)
                                 d.minutosEfectivos < 300 && !d.tardanza && d.minutosExtra == 0L && d.minutosExcesoDescanso == 0L -> ChipSimple("Medio día", TextoSecundario)
@@ -404,11 +422,30 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
                             if (d.minutosExcesoDescanso > 0) ChipSimple("Exceso desc. ${d.minutosExcesoDescanso} min", Rojo)
                             if (d.minutosExtra > 0) ChipSimple("Extra ${Fechas.duracion(d.minutosExtra)}", Teal)
                         }
+                        descDia.forEach { x -> Text("Descuento: ${x.concepto} −${dinero(mon, x.monto)}", Modifier.padding(top = 4.dp), color = Rojo, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold) }
                     }
                 }
             }
         }
         if (r.dias.isEmpty()) item { TextoCentrado("Sin registros en este mes.") }
+        if (r.descuentos.isNotEmpty()) item {
+            Seccion("Descuentos de mi empleador", borde = Borde) {
+                r.descuentos.sortedByDescending { it.fecha }.forEach { x ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(Icons.Default.MoneyOff, null, tint = Rojo, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(x.concepto, fontWeight = FontWeight.SemiBold)
+                            Text("${Fechas.fechaCorta(x.fecha)} · ${x.motivo}", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                        }
+                        Text("−${dinero(mon, x.monto)}", color = Rojo, fontWeight = FontWeight.Bold)
+                    }
+                }
+                HorizontalDivider(color = Borde)
+                FilaDato("Total descontado", "−${dinero(mon, r.totalDescuentosEmpleador)}", destacado = true, colorValor = Rojo)
+                Text("Los descuentos los aplica tu empleador y ya están restados en tu boleta.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            }
+        }
         item {
             val b = r.boleta
             Seccion("Mi Boleta de Pago — ${Fechas.etiquetaMes(mes)}", borde = Borde) {
