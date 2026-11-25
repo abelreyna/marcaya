@@ -7,7 +7,7 @@
 * **Autor y Desarrollador Principal:** **Juan Abel Reyna Gonzales — Ingeniero Industrial**
 * **Correo Electrónico de Contacto:** `abel.reynago@gmail.com`
 * **Repositorio en GitHub:** `registro-de-tiempo-de-personal`
-* **Plataforma Objetivo:** Android (SDK mínimo: API 24 / Android 7.0 Nougat | SDK objetivo: API 35 / Android 15)
+* **Plataforma Objetivo:** Android (SDK mínimo: API 24 / Android 7.0 Nougat | SDK objetivo: API 36 / Android 16)
 * **País de Aplicación Normativa:** Perú (Moneda principal: Soles `S/`, con soporte configurable para `USD $`).
 * **Descripción Ejecutiva:** Solución integral diseñada y desarrollada por **Juan Abel Reyna Gonzales (Ingeniero Industrial)** para gestionar, auditar y automatizar el control de asistencia del personal mediante validación biométrica facial instantánea en dispositivo (sin almacenamiento de imágenes), delimitación geográfica matemática (*geofencing* GPS) y cálculo salarial transparente bajo dos modalidades seleccionables por el Administrador: **Modo Simple (Pago directo por horas para MYPES)** y **Modo Avanzado (Cálculo integral de planilla, beneficios sociales y tributación vigente en Perú)**.
 
