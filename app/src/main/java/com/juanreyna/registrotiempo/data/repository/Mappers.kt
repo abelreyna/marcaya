@@ -59,11 +59,13 @@ fun Horario.aMapa(): Map<String, Any> = mapOf(
 )
 
 /** Lee el horario; los perfiles antiguos solo tenían "horaIngresoEsperada". */
+private fun DocumentSnapshot.horarioDe(): Horario =
+    horarioDeMapa(get("horario"), Horario(entrada = getString("horaIngresoEsperada") ?: "08:00"))
+
+/** Convierte el mapa guardado en Firestore en un [Horario]; [d] da los valores que falten. */
 @Suppress("UNCHECKED_CAST")
-private fun DocumentSnapshot.horarioDe(): Horario {
-    val m = get("horario") as? Map<String, Any?>
-    val d = Horario(entrada = getString("horaIngresoEsperada") ?: "08:00")
-    if (m == null) return d
+fun horarioDeMapa(mapa: Any?, d: Horario = Horario()): Horario {
+    val m = mapa as? Map<String, Any?> ?: return d
     return Horario(
         entrada = m["entrada"] as? String ?: d.entrada,
         inicioDescanso = m["inicioDescanso"] as? String ?: d.inicioDescanso,
@@ -134,6 +136,7 @@ fun DocumentSnapshot.aEmpresa(): Empresa {
         modoPagoGlobal = enumDe(get("modoPagoGlobal"), ModoPago.SIMPLE),
         ruc = s("ruc"),
         razonSocial = s("razonSocial"),
+        horarioPredeterminado = get("horarioPredeterminado")?.let { horarioDeMapa(it) },
         geocerca = if (g == null) Geocerca() else Geocerca(
             nombre = g["nombre"] as? String ?: "Sede principal",
             latitud = (g["latitud"] as? Number)?.toDouble() ?: 0.0,

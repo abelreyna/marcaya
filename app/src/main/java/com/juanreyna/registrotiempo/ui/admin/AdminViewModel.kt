@@ -188,6 +188,12 @@ class AdminViewModel @Inject constructor(
     fun guardarColaborador(u: Usuario, cfg: ConfigPago, horario: Horario, activo: Boolean, tipoDocumento: TipoDocumento, dni: String) =
         ejecutar("Datos de ${u.nombre} actualizados") { repo.actualizarColaborador(u.uid, cfg, horario, activo, tipoDocumento, dni) }
 
+    /** Horario que reciben automáticamente los colaboradores que se registren con el código. */
+    fun guardarHorarioPredeterminado(horario: Horario) = ejecutar("Horario predeterminado guardado") {
+        val e = ui.value.empresa ?: error("Empresa no cargada")
+        repo.guardarHorarioPredeterminado(adminId, e.codigoAdministrador, horario)
+    }
+
     /** Pestaña Horarios: aplica un mismo horario a los colaboradores seleccionados. */
     fun aplicarHorario(uids: List<String>, horario: Horario) =
         ejecutar("Horario aplicado a ${uids.size} ${if (uids.size == 1) "colaborador" else "colaboradores"}") {

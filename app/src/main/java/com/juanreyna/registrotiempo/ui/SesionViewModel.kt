@@ -142,9 +142,9 @@ class SesionViewModel @Inject constructor(
         }
     }
 
-    fun registrarAdministrador(nombre: String, empresa: String) = registrar {
+    fun registrarAdministrador(nombre: String, empresa: String, horario: com.juanreyna.registrotiempo.domain.model.Horario) = registrar {
         val u = auth.usuarioActual!!
-        repo.registrarAdministrador(u.uid, u.email.orEmpty(), nombre, empresa)
+        repo.registrarAdministrador(u.uid, u.email.orEmpty(), nombre, empresa, horario)
     }
 
     fun registrarColaborador(nombre: String, tipoDocumento: TipoDocumento, dni: String, telefono: String, codigo: String) = registrar {

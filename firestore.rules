@@ -70,7 +70,11 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo))
           && get(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo)).data.adminId
                == request.resource.data.adminId
-          && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje', 'horario'])
+          && !request.resource.data.keys().hasAny(['configPago', 'tarifaPorHora', 'regimenLaboral', 'ultimoMarcaje'])
+          // Horario: solo el predeterminado que el administrador guardó en su código
+          && (!('horario' in request.resource.data)
+              || request.resource.data.horario
+                 == get(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo)).data.get('horario', null))
           // Documento con dígitos exactos (DNI 8, Carnet de Extranjería 9) y celular peruano de 9 dígitos
           && ((request.resource.data.tipoDocumento == 'DNI' && request.resource.data.dni.matches('[0-9]{8}'))
               || (request.resource.data.tipoDocumento == 'CE' && request.resource.data.dni.matches('[0-9]{9}')))
@@ -85,8 +89,11 @@ service cloud.firestore {
         (request.auth.uid == userId
           && resource.data.rol == 'COLABORADOR'
           && resource.data.adminId == ''
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminId', 'codigoVinculo', 'activo'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminId', 'codigoVinculo', 'activo', 'horario', 'horaIngresoEsperada'])
           && request.resource.data.activo == true
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['horario'])
+              || request.resource.data.horario
+                 == get(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo)).data.get('horario', null))
           && exists(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo))
           && get(/databases/$(database)/documents/codigos/$(request.resource.data.codigoVinculo)).data.adminId
                == request.resource.data.adminId) ||
@@ -113,8 +120,11 @@ service cloud.firestore {
       allow list: if false; // evita enumerar códigos
       allow create: if isAuthenticated()
         && request.resource.data.adminId == request.auth.uid
-        && codigo.matches('ADM-[0-9]{4}-[A-Z]');
-      allow update: if false;
+        && codigo.matches('ADM-[0-9]{4}-[A-Z]')
+        && request.resource.data.keys().hasOnly(['adminId', 'horario']);
+      // El administrador solo puede cambiar el horario predeterminado de su código
+      allow update: if isAuthenticated() && resource.data.adminId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['horario']);
       allow delete: if isAuthenticated() && resource.data.adminId == request.auth.uid;
     }
 

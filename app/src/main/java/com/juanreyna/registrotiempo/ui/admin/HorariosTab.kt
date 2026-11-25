@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -188,6 +190,94 @@ internal fun SelectorDias(dias: List<Int>, alCambiar: (List<Int>) -> Unit) {
 }
 
 /**
+ * Campos para definir un horario: días laborables, horas (generales o por día), descanso y tolerancia.
+ * La tolerancia va como texto aparte para poder escribirla libremente; ver [toleranciaValida].
+ */
+@Composable
+internal fun CamposHorario(horario: Horario, tolerancia: String, alCambiar: (Horario) -> Unit, alCambiarTolerancia: (String) -> Unit) {
+    SelectorDias(horario.diasLaborables) { alCambiar(horario.copy(diasLaborables = it)) }
+    EditorTurnos(horario, alCambiar)
+    if (!horario.porDia) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CampoHora("Entrada", horario.entrada, Modifier.weight(1f)) { alCambiar(horario.copy(entrada = it)) }
+            CampoHora("Salida", horario.salida, Modifier.weight(1f)) { alCambiar(horario.copy(salida = it)) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { alCambiar(horario.copy(inicioDescanso = it)) }
+            CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { alCambiar(horario.copy(finDescanso = it)) }
+        }
+    }
+    OutlinedTextField(
+        tolerancia, { alCambiarTolerancia(it.filter(Char::isDigit).take(2)) }, Modifier.fillMaxWidth(),
+        label = { Text("Tolerancia (minutos)") }, shape = FormaCampo, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        isError = !toleranciaValida(tolerancia)
+    )
+    Text(
+        when {
+            !horario.jornadasValidas() -> "Revisa el horario: la jornada no puede quedar en cero."
+            horario.porDia -> "Total semanal: ${Fechas.duracion(horario.minutosSemana())}"
+            else -> "Jornada: ${Fechas.duracion(horario.minutosJornadaProgramada.toLong())} · Descanso: ${Fechas.duracion(horario.minutosDescansoProgramado.toLong())}"
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = if (horario.jornadasValidas()) TextoSecundario else Rojo
+    )
+}
+
+internal fun toleranciaValida(t: String) = t.toIntOrNull()?.let { it in 0..60 } == true
+
+/** Horario predeterminado de la empresa: lo recibe automáticamente cada colaborador que se registra con el código. */
+@Composable
+private fun SeccionHorarioPredeterminado(actual: Horario?, alGuardar: (Horario) -> Unit) {
+    var editando by remember { mutableStateOf(false) }
+    Seccion("Horario para nuevos colaboradores", borde = Borde) {
+        Text(
+            "Se asigna automáticamente a cada trabajador que se registre con tu Código de Administrador. Después puedes cambiarle el horario a cualquiera.",
+            style = MaterialTheme.typography.bodySmall, color = TextoSecundario
+        )
+        if (actual != null) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(TealClaro).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                if (actual.porDia) actual.horasPorDia().forEach { (d, h) -> Text("$d  $h", style = MaterialTheme.typography.bodySmall, color = AzulMarino) }
+                else {
+                    Text("${actual.entrada}–${actual.salida} · ${actual.diasTexto()}", fontWeight = FontWeight.Bold, color = AzulMarino)
+                    Text(
+                        if (actual.minutosDescansoProgramado > 0) "Descanso ${actual.inicioDescanso}–${actual.finDescanso}" else "Sin descanso",
+                        style = MaterialTheme.typography.bodySmall, color = AzulMarino
+                    )
+                }
+                Text("Tolerancia: ${actual.toleranciaMin} min", style = MaterialTheme.typography.bodySmall, color = AzulMarino)
+            }
+        } else Text("Aún no definido: los nuevos colaboradores reciben el horario estándar (L–S 08:00–17:00).", style = MaterialTheme.typography.bodySmall, color = Rojo)
+        BotonPill(if (actual != null) "Cambiar horario predeterminado" else "Definir horario predeterminado", { editando = true }, alto = 44.dp)
+    }
+    if (editando) {
+        var h by remember { mutableStateOf(actual ?: Horario()) }
+        var tol by remember { mutableStateOf((actual ?: Horario()).toleranciaMin.toString()) }
+        val ok = h.jornadasValidas() && toleranciaValida(tol)
+        AlertDialog(
+            onDismissRequest = { editando = false },
+            icon = { androidx.compose.material3.Icon(Icons.Default.Schedule, null, tint = Teal) },
+            title = { Text("Horario para nuevos colaboradores") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CamposHorario(h, tol, { h = it }, { tol = it })
+                    Text("No cambia el horario de quienes ya están en tu equipo.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                }
+            },
+            confirmButton = {
+                TextButton({ alGuardar(h.copy(toleranciaMin = tol.toInt())); editando = false }, enabled = ok) {
+                    Text("Guardar", color = if (ok) Teal else TextoSecundario, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ editando = false }) { Text("Cancelar") } }
+        )
+    }
+}
+
+/**
  * Pestaña "Horarios": el administrador define un horario y elige qué colaboradores lo usan
  * (uno, un grupo o todo el equipo). Muestra los horarios vigentes agrupados para seleccionar grupos.
  */
@@ -215,6 +305,7 @@ internal fun PestanaHorarios(vm: AdminViewModel, ui: UiAdmin) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { Spacer(Modifier.height(6.dp)) }
+        item { SeccionHorarioPredeterminado(ui.empresa?.horarioPredeterminado) { vm.guardarHorarioPredeterminado(it) } }
         if (cols.isNotEmpty()) item {
             // Interruptor rápido: domingo laborable para todo el equipo
             val conDomingo = cols.count { 7 in it.horario.diasLaborables }
@@ -238,33 +329,7 @@ internal fun PestanaHorarios(vm: AdminViewModel, ui: UiAdmin) {
         }
         item {
             Seccion("1. Define el horario", borde = Borde) {
-                SelectorDias(horario.diasLaborables) { horario = horario.copy(diasLaborables = it) }
-                EditorTurnos(horario) { horario = it }
-                if (!horario.porDia) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CampoHora("Entrada", horario.entrada, Modifier.weight(1f)) { horario = horario.copy(entrada = it) }
-                        CampoHora("Salida", horario.salida, Modifier.weight(1f)) { horario = horario.copy(salida = it) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CampoHora("Inicio descanso", horario.inicioDescanso, Modifier.weight(1f)) { horario = horario.copy(inicioDescanso = it) }
-                        CampoHora("Fin descanso", horario.finDescanso, Modifier.weight(1f)) { horario = horario.copy(finDescanso = it) }
-                    }
-                }
-                OutlinedTextField(
-                    tolerancia, { tolerancia = it.filter(Char::isDigit).take(2) }, Modifier.fillMaxWidth(),
-                    label = { Text("Tolerancia (minutos)") }, shape = FormaCampo, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    isError = !valido && (toleranciaMin == null || toleranciaMin > 60)
-                )
-                Text(
-                    when {
-                        !horario.jornadasValidas() -> "Revisa el horario: la jornada no puede quedar en cero."
-                        horario.porDia -> "Total semanal: ${Fechas.duracion(horario.minutosSemana())}"
-                        else -> "Jornada: ${Fechas.duracion(horario.minutosJornadaProgramada.toLong())} · Descanso: ${Fechas.duracion(horario.minutosDescansoProgramado.toLong())}"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (horario.jornadasValidas()) TextoSecundario else Rojo
-                )
+                CamposHorario(horario, tolerancia, { horario = it }, { tolerancia = it })
             }
         }
 

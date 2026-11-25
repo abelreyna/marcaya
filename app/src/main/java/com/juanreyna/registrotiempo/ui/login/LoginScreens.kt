@@ -1,5 +1,10 @@
 package com.juanreyna.registrotiempo.ui.login
 
+import androidx.compose.runtime.remember
+import com.juanreyna.registrotiempo.ui.admin.jornadasValidas
+import com.juanreyna.registrotiempo.ui.admin.toleranciaValida
+import com.juanreyna.registrotiempo.ui.admin.CamposHorario
+import com.juanreyna.registrotiempo.domain.model.Horario
 import com.juanreyna.registrotiempo.ui.components.SelectorDocumento
 import com.juanreyna.registrotiempo.domain.model.Celular
 import com.juanreyna.registrotiempo.domain.model.TipoDocumento
@@ -189,7 +194,7 @@ fun RegistroScreen(
     estado: EstadoSesion,
     nombreInicial: String,
     alVolver: () -> Unit,
-    alRegistrarAdmin: (String, String) -> Unit,
+    alRegistrarAdmin: (String, String, Horario) -> Unit,
     alRegistrarColaborador: (String, TipoDocumento, String, String, String) -> Unit
 ) {
     var esAdmin by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -199,6 +204,8 @@ fun RegistroScreen(
     var tipoDoc by rememberSaveable { mutableStateOf<TipoDocumento?>(null) }
     var telefono by rememberSaveable { mutableStateOf("") }
     var codigo by rememberSaveable { mutableStateOf("") }
+    var horario by remember { mutableStateOf(Horario()) }
+    var tolerancia by rememberSaveable { mutableStateOf(Horario().toleranciaMin.toString()) }
 
     MarcoPantalla("Crear Cuenta", subtitulo = "Selección de rol y datos", alVolver = alVolver) {
         Column(
@@ -213,9 +220,16 @@ fun RegistroScreen(
                 true -> {
                     Campo(nombre, { nombre = it }, "Nombre Completo")
                     Campo(empresa, { empresa = it }, "Razón Social / Nombre comercial")
+                    Seccion("Horario de trabajo de tus colaboradores", borde = Color(0xFFD5DCE5)) {
+                        Text(
+                            "Se asignará automáticamente a cada colaborador que se registre con tu código. Puedes cambiarlo cuando quieras en la pestaña Horarios.",
+                            style = MaterialTheme.typography.bodySmall, color = TextoSecundario
+                        )
+                        CamposHorario(horario, tolerancia, { horario = it }, { tolerancia = it })
+                    }
                     Text("Se generará tu Código de Administrador (ej. ADM-8392-X). Plan inicial: FREE.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-                    BotonPill("Crear Cuenta", { alRegistrarAdmin(nombre.trim(), empresa.trim()) },
-                        enabled = !estado.procesando && nombre.isNotBlank() && empresa.isNotBlank())
+                    BotonPill("Crear Cuenta", { alRegistrarAdmin(nombre.trim(), empresa.trim(), horario.copy(toleranciaMin = tolerancia.toInt())) },
+                        enabled = !estado.procesando && nombre.isNotBlank() && empresa.isNotBlank() && horario.jornadasValidas() && toleranciaValida(tolerancia))
                 }
                 false -> {
                     Campo(nombre, { nombre = it }, "Nombre Completo")

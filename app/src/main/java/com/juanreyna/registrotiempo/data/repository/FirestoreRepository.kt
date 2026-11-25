@@ -78,15 +78,19 @@ class FirestoreRepository @Inject constructor() {
         usuarios.document(uid).update("foto", foto).await()
     }
 
-    /** Registro del Administrador: perfil → empresa (plan FREE) → código único. */
-    suspend fun registrarAdministrador(uid: String, correo: String, nombre: String, nombreComercial: String): String {
+    /**
+     * Registro del Administrador: perfil → código único → empresa (plan FREE).
+     * [horario] es el horario predeterminado de su equipo: se guarda en la empresa y en el código,
+     * para asignarlo a cada colaborador que se registre con ese código.
+     */
+    suspend fun registrarAdministrador(uid: String, correo: String, nombre: String, nombreComercial: String, horario: Horario): String {
         usuarios.document(uid).set(
             mapOf(
                 "rol" to Rol.ADMINISTRADOR.name, "adminId" to uid, "nombre" to nombre,
                 "correo" to correo, "activo" to true, "creado" to FieldValue.serverTimestamp()
             )
         ).await()
-        val codigo = reservarCodigoUnico(uid)
+        val codigo = reservarCodigoUnico(uid, horario)
         empresas.document(uid).set(
             mapOf(
                 "nombreComercial" to nombreComercial,
@@ -95,19 +99,32 @@ class FirestoreRepository @Inject constructor() {
                 "fechaCreacion" to FieldValue.serverTimestamp(),
                 "moneda" to "PEN",
                 "modoPagoGlobal" to ModoPago.SIMPLE.name,
-                "geocerca" to Geocerca().aMapa()
+                "geocerca" to Geocerca().aMapa(),
+                "horarioPredeterminado" to horario.aMapa()
             )
         ).await()
         return codigo
     }
 
-    private suspend fun reservarCodigoUnico(uid: String): String {
+    /** Cambia el horario predeterminado: lo reciben los colaboradores que se registren desde ahora. */
+    suspend fun guardarHorarioPredeterminado(adminId: String, codigo: String, horario: Horario) {
+        val b = db.batch()
+        b.update(empresas.document(adminId), "horarioPredeterminado", horario.aMapa())
+        if (codigo.isNotBlank()) b.update(codigos.document(codigo), "horario", horario.aMapa())
+        b.commit().await()
+    }
+
+    /** Horario del código tal como está guardado (se copia sin transformar: las reglas lo comparan campo a campo). */
+    private fun horarioDelCodigo(doc: com.google.firebase.firestore.DocumentSnapshot): Map<String, Any> =
+        doc.get("horario")?.let { h -> mapOf("horario" to h, "horaIngresoEsperada" to horarioDeMapa(h).entrada) }.orEmpty()
+
+    private suspend fun reservarCodigoUnico(uid: String, horario: Horario): String {
         repeat(10) {
             val codigo = "ADM-%04d-%c".format(Random.nextInt(0, 10_000), ('A'..'Z').random())
             val ref = codigos.document(codigo)
             val ok = db.runTransaction { tx ->
                 if (tx.get(ref).exists()) false
-                else { tx.set(ref, mapOf("adminId" to uid)); true }
+                else { tx.set(ref, mapOf("adminId" to uid, "horario" to horario.aMapa())); true }
             }.await()
             if (ok) return codigo
         }
@@ -127,9 +144,9 @@ class FirestoreRepository @Inject constructor() {
             mapOf(
                 "rol" to Rol.COLABORADOR.name, "adminId" to adminId, "codigoVinculo" to cod,
                 "nombre" to nombre, "correo" to correo, "dni" to dni, "tipoDocumento" to tipoDocumento.name, "telefono" to telefono,
-                "activo" to true, "horaIngresoEsperada" to Horario().entrada, // el horario completo lo fija el administrador
+                "activo" to true, "horaIngresoEsperada" to Horario().entrada,
                 "creado" to FieldValue.serverTimestamp()
-            )
+            ) + horarioDelCodigo(doc) // horario predeterminado de la empresa (si el administrador lo definió)
         ).await()
     }
 
@@ -418,8 +435,9 @@ class FirestoreRepository @Inject constructor() {
     /** Un colaborador sin empresa se vincula a otra con un nuevo Código de Administrador. */
     suspend fun revincularColaborador(uid: String, codigo: String) {
         val cod = codigo.trim().uppercase()
-        val adminId = codigos.document(cod).get().await().getString("adminId") ?: error("Código de Administrador no válido")
-        usuarios.document(uid).update(mapOf("adminId" to adminId, "codigoVinculo" to cod, "activo" to true)).await()
+        val doc = codigos.document(cod).get().await()
+        val adminId = doc.getString("adminId") ?: error("Código de Administrador no válido")
+        usuarios.document(uid).update(mapOf("adminId" to adminId, "codigoVinculo" to cod, "activo" to true) + horarioDelCodigo(doc)).await()
     }
 
     /**

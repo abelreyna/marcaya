@@ -207,7 +207,9 @@ data class Empresa(
     val geocerca: Geocerca = Geocerca(),
     /** Datos del empleador exigidos en boletas y registros (DS 001-98-TR, DS 004-2006-TR). */
     val ruc: String = "",
-    val razonSocial: String = ""
+    val razonSocial: String = "",
+    /** Horario que se asigna automáticamente a cada colaborador que se registra con el código (null = no definido). */
+    val horarioPredeterminado: Horario? = null
 )
 
 data class Marcaje(
