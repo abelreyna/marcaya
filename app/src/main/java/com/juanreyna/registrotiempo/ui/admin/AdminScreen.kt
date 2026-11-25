@@ -298,7 +298,7 @@ private fun PestanaPanel(vm: AdminViewModel, ui: UiAdmin) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val mon = e.moneda.simbolo
-    val textoCompartir = "Únete a ${e.nombreComercial} en la app Registro de Tiempo de Personal con el Código de Administrador: ${e.codigoAdministrador}"
+    val textoCompartir = "Únete a ${e.nombreComercial} en la app Marcaya con el Código de Administrador: ${e.codigoAdministrador}"
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             // Tarjeta azul marino del código para colaboradores

@@ -99,7 +99,7 @@ object ReportExporter {
 
         fun terminar(archivo: File) {
             linea("")
-            linea("Generado por Registro de Tiempo de Personal v1.0.0 — © 2026 Juan Abel Reyna Gonzales", normal.apply { textSize = 8f })
+            linea("Generado por Marcaya v1.0.0 — © 2026 Juan Abel Reyna Gonzales", normal.apply { textSize = 8f })
             doc.finishPage(pagina)
             archivo.outputStream().use { doc.writeTo(it) }
             doc.close()

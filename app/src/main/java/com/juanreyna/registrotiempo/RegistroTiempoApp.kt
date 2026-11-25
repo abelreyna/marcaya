@@ -6,7 +6,7 @@ import com.juanreyna.registrotiempo.data.remote.FirebaseState
 import dagger.hilt.android.HiltAndroidApp
 
 /**
- * Registro de Tiempo de Personal v1.0.0
+ * Marcaya v1.0.0
  * Autor y desarrollador: Juan Abel Reyna Gonzales — Ingeniero Industrial
  */
 @HiltAndroidApp

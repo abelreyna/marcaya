@@ -62,7 +62,7 @@ object PlanillaPdf {
         private fun cerrarPagina() {
             val p = pagina ?: return
             val pie = pintura(6.5f, color = SECUNDARIO)
-            p.canvas.drawText("${empresa.razonSocial.ifBlank { empresa.nombreComercial }} · $periodo · Registro de Tiempo de Personal v1.0.0", margen, alto - 14f, pie)
+            p.canvas.drawText("${empresa.razonSocial.ifBlank { empresa.nombreComercial }} · $periodo · Marcaya v1.0.0", margen, alto - 14f, pie)
             val t = "Página $numero"
             p.canvas.drawText(t, ancho - margen - pie.measureText(t), alto - 14f, pie)
             pdf.finishPage(p)
@@ -516,7 +516,7 @@ object PlanillaPdf {
         firmas(d, listOf("Firma y sello del empleador o representante", "Recibí conforme — firma y huella digital del trabajador"), H)
         d.parrafo(
             "Boleta emitida conforme al D.S. N° 001-98-TR; puede entregarse en físico o por medios electrónicos con firma digital (D.S. N° 009-2011-TR). " +
-                "Documento referencial calculado con los marcajes registrados en la app Registro de Tiempo de Personal.",
+                "Documento referencial calculado con los marcajes registrados en la app Marcaya.",
             d.pintura(6.3f, color = SECUNDARIO, cursiva = true), H
         )
     }

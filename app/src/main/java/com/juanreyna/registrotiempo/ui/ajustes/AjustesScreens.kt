@@ -192,7 +192,8 @@ fun AcercaDeScreen(alVolver: () -> Unit) {
             Text("Acerca de", Modifier.align(Alignment.CenterVertically), color = Color.White, style = MaterialTheme.typography.titleLarge)
         }
         Isotipo(150.dp)
-        Text("Registro de Tiempo\nde Personal", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text("Marcaya", color = Color.White, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+        Text("Marca tu asistencia en un segundo", color = Color(0xFF2EE6A6), fontWeight = FontWeight.SemiBold)
         Text("Información de la app · Versión ${BuildConfig.VERSION_NAME}", color = Color.White.copy(alpha = 0.75f))
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Teal).padding(16.dp),
@@ -209,7 +210,7 @@ fun AcercaDeScreen(alVolver: () -> Unit) {
         )
         BotonPill("Contactar por Correo", {
             val i = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$CORREO_AUTOR")).apply {
-                putExtra(Intent.EXTRA_SUBJECT, "Registro de Tiempo de Personal — Consulta")
+                putExtra(Intent.EXTRA_SUBJECT, "Marcaya — Consulta")
             }
             runCatching { context.startActivity(i) }
         }, icono = Icons.Default.Email)
@@ -243,12 +244,12 @@ fun VipScreen(config: VipConfig, diasRestantes: Long, bloqueado: Boolean, alVolv
             Text("Activación sin comisiones: escríbenos, confirma tu pago y activaremos tu licencia al instante.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
             BotonPill("Solicitar por correo", {
                 val i = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$CORREO_AUTOR")).apply {
-                    putExtra(Intent.EXTRA_SUBJECT, "Activación Plan VIP — Registro de Tiempo de Personal")
+                    putExtra(Intent.EXTRA_SUBJECT, "Activación Plan VIP — Marcaya")
                 }
                 runCatching { context.startActivity(i) }
             }, icono = Icons.Default.Email)
             BotonPillContorno("Solicitar por WhatsApp", {
-                val texto = "Hola, deseo activar el Plan VIP de Registro de Tiempo de Personal."
+                val texto = "Hola, deseo activar el Plan VIP de Marcaya."
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$WHATSAPP_PROPIETARIO?text=" + Uri.encode(texto)))) }
             }, Modifier.fillMaxWidth(), color = Teal)
         }

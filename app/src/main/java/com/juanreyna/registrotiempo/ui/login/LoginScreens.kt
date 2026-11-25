@@ -75,15 +75,19 @@ fun LoginScreen(estado: EstadoSesion, alIniciar: (Activity, Boolean) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.weight(1f))
-        Isotipo(170.dp)
-        Spacer(Modifier.height(12.dp))
+        Isotipo(150.dp)
+        Spacer(Modifier.height(20.dp))
         Text(
-            "Registro de Tiempo\nde Personal", color = Color.White, textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold
+            "Marcaya", color = Color.White, textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black
+        )
+        Text(
+            "Marca tu asistencia en un segundo", color = Color(0xFF2EE6A6), textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Asistencia biométrica, geocercas GPS y planilla Perú", color = Color.White.copy(alpha = 0.75f),
+            "Rostro · GPS · Planilla Perú", color = Color.White.copy(alpha = 0.75f),
             textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium
         )
         Spacer(Modifier.weight(1f))

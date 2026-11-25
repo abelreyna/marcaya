@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="10" android:startY="0" android:endX="98" android:endY="108">
+                <item android:offset="0" android:color="#FF0A1C38"/>
+                <item android:offset="0.55" android:color="#FF13406A"/>
+                <item android:offset="1" android:color="#FF0F8B6D"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Brillo superior -->
+    <path android:pathData="M54,-20m-70,0a70,70 0,1 1,140 0a70,70 0,1 1,-140 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="54" android:centerY="-20" android:gradientRadius="70">
+                <item android:offset="0" android:color="#33FFFFFF"/>
+                <item android:offset="1" android:color="#00FFFFFF"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Geocerca: ondas alrededor del punto -->
+    <path android:strokeColor="#2EFFFFFF" android:strokeWidth="1.2" android:pathData="M54,80m-30,0a30,8.5 0,1 1,60 0a30,8.5 0,1 1,-60 0"/>
+    <path android:strokeColor="#55FFFFFF" android:strokeWidth="1.4" android:pathData="M54,80m-19,0a19,5.4 0,1 1,38 0a19,5.4 0,1 1,-38 0"/>
+    <path android:fillColor="#3D2EE6A6" android:pathData="M54,80m-9,0a9,2.6 0,1 1,18 0a9,2.6 0,1 1,-18 0"/>
+</vector>

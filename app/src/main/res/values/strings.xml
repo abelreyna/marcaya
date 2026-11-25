@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Registro de Tiempo de Personal</string>
+    <string name="app_name">Marcaya</string>
     <string name="app_descripcion">Sistema integral de control de asistencia con validación biométrica facial instantánea, geocercas GPS y cálculo salarial (Modo Simple MYPE y Modo Avanzado Perú).</string>
     <string name="autor_nombre">Juan Abel Reyna Gonzales</string>
     <string name="autor_especialidad">Ingeniero Industrial</string>

@@ -33,7 +33,7 @@ class AsistenciaMessagingService : FirebaseMessagingService() {
 
         fun mostrar(context: Context, titulo: String, cuerpo: String) {
             val n = NotificationCompat.Builder(context, CANAL)
-                .setSmallIcon(R.drawable.ic_isotipo)
+                .setSmallIcon(R.drawable.ic_notificacion)
                 .setContentTitle(titulo)
                 .setContentText(cuerpo)
                 .setAutoCancel(true)
