@@ -36,8 +36,23 @@ android {
         manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY", "")
     }
 
+    // Llave de subida a Google Play: keystore.properties y el .jks viven fuera de git (ver .gitignore).
+    val firma = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (firma.getProperty("storeFile") != null) create("subida") {
+            storeFile = rootProject.file(firma.getProperty("storeFile"))
+            storePassword = firma.getProperty("storePassword")
+            keyAlias = firma.getProperty("keyAlias")
+            keyPassword = firma.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("subida")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

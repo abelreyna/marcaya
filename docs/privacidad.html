@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidad — Marcaya</title>
+<style>
+  :root { --azul:#13294B; --verde:#0F8B6D; --fondo:#F5F7FA; --texto:#1C1F24; --gris:#5A6270; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--fondo); color:var(--texto); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  header { background:linear-gradient(135deg,var(--azul),var(--verde)); color:#fff; padding:32px 16px; }
+  header h1 { margin:0 auto; max-width:760px; font-size:1.6rem; }
+  header p { margin:6px auto 0; max-width:760px; opacity:.9; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
+  section { background:#fff; border-radius:16px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  h2 { color:var(--azul); font-size:1.15rem; margin-top:0; }
+  ul { padding-left:1.3rem; }
+  a { color:var(--verde); }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid #E3E7ED; vertical-align:top; }
+  .destacado { border-left:4px solid var(--verde); background:#E9F6F2; padding:12px 14px; border-radius:8px; }
+  footer { text-align:center; color:var(--gris); font-size:.85rem; padding-bottom:32px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Política de Privacidad de Marcaya</h1>
+  <p>Vigente desde el 25 de noviembre de 2026 · Juan Abel Reyna Gonzales</p>
+</header>
+<main>
+  <section>
+    <h2>1. Quién es responsable</h2>
+    <p><strong>Marcaya</strong> (paquete <code>com.juanreyna.registrotiempo</code>) es una aplicación de control de asistencia desarrollada por <strong>Juan Abel Reyna Gonzales</strong>, Ingeniero Industrial, en Perú. Para cualquier consulta sobre tus datos escribe a <a href="mailto:abel.reynago@gmail.com">abel.reynago@gmail.com</a>.</p>
+    <p>La empresa que usa Marcaya para registrar la asistencia de su personal (el «empleador» o «administrador») decide qué datos de sus trabajadores registra y con qué fin laboral. Esta política se rige por la Ley N.º 29733, Ley de Protección de Datos Personales del Perú, y su reglamento.</p>
+  </section>
+
+  <section>
+    <h2>2. Datos que recogemos</h2>
+    <table>
+      <tr><th>Dato</th><th>Para qué se usa</th></tr>
+      <tr><td>Nombre, correo y foto de tu cuenta de Google</td><td>Iniciar sesión y mostrar tu perfil.</td></tr>
+      <tr><td>Nombre completo, DNI o Carnet de Extranjería, teléfono, cargo y fecha de ingreso</td><td>Identificarte ante tu empleador y generar reportes laborales exigidos por ley (registro de asistencia, boletas, PLAME).</td></tr>
+      <tr><td>Ubicación precisa (GPS) en el momento de marcar</td><td>Comprobar que estás dentro de la zona de trabajo y calcular la distancia en metros. Solo se lee al marcar, con la app abierta; no se hace seguimiento en segundo plano.</td></tr>
+      <tr><td>Hora de cada marcaje (hora del servidor)</td><td>Registrar ingreso, descanso y salida, y calcular horas trabajadas.</td></tr>
+      <tr><td>Tarifa, sueldo, régimen laboral, sistema de pensiones, descuentos y justificaciones</td><td>Calcular el pago y la boleta, y gestionar incidencias.</td></tr>
+      <tr><td>Foto de perfil opcional</td><td>Mostrarla en tu perfil. Solo si tú la eliges.</td></tr>
+      <tr><td>Nombre comercial, RUC y razón social (administradores)</td><td>Identificar a la empresa en reportes y planillas.</td></tr>
+      <tr><td>Identificadores técnicos (token de notificaciones, verificación de integridad de la app)</td><td>Enviar notificaciones y proteger el servicio contra fraudes.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>3. Cámara y reconocimiento de rostro</h2>
+    <div class="destacado">
+      <p><strong>No guardamos ninguna imagen de tu rostro.</strong> Al marcar, la cámara frontal comprueba en tu propio celular que hay una persona real (parpadeo y giro de cabeza) con Google ML Kit. La imagen se analiza en la memoria del teléfono y se descarta al instante. No se sube a servidores, no se crea una plantilla biométrica y no se identifica a la persona: solo se guarda el resultado «verificación correcta».</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. Con quién se comparten los datos</h2>
+    <ul>
+      <li><strong>Tu empleador</strong>: ve tus marcajes, ubicación al marcar, horas, pagos, descuentos y justificaciones. Cada empresa solo ve a su propio personal.</li>
+      <li><strong>Google (proveedor de infraestructura)</strong>: Firebase Authentication, Cloud Firestore, Remote Config, Cloud Messaging y App Check almacenan y procesan los datos por cuenta nuestra. Google Maps se usa solo para que el administrador dibuje la zona de trabajo.</li>
+    </ul>
+    <p>No vendemos tus datos, no los usamos para publicidad y no los compartimos con otros terceros, salvo requerimiento de una autoridad competente.</p>
+  </section>
+
+  <section>
+    <h2>5. Seguridad</h2>
+    <ul>
+      <li>Toda la comunicación viaja cifrada (HTTPS/TLS).</li>
+      <li>Reglas de acceso en el servidor: cada usuario solo ve lo que le corresponde, y los marcajes no se pueden editar ni borrar desde el celular del trabajador.</li>
+      <li>Los datos de sesión en el teléfono se cifran con Android Keystore.</li>
+      <li>Se detectan ubicaciones falsas y se usa la hora oficial del servidor.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>6. Cuánto tiempo los conservamos</h2>
+    <p>Los datos se conservan mientras tu cuenta esté activa. Los registros de asistencia pueden conservarse por el plazo que exige la normativa laboral peruana para el registro de control de asistencia (DS 004-2006-TR), como respaldo del empleador y del trabajador.</p>
+  </section>
+
+  <section>
+    <h2>7. Tus derechos y cómo eliminar tu cuenta</h2>
+    <p>Puedes acceder, rectificar, cancelar u oponerte al tratamiento de tus datos (derechos ARCO). Puedes editar tu perfil en la app y eliminar tu cuenta desde <strong>Ajustes → Eliminar mi cuenta</strong>, o seguir las instrucciones de <a href="eliminar-cuenta.html">esta página</a>. También puedes escribir a <a href="mailto:abel.reynago@gmail.com">abel.reynago@gmail.com</a>; respondemos en un plazo máximo de 15 días hábiles.</p>
+  </section>
+
+  <section>
+    <h2>8. Menores de edad</h2>
+    <p>Marcaya está dirigida a empresas y trabajadores mayores de 18 años. No recogemos datos de menores a sabiendas.</p>
+  </section>
+
+  <section>
+    <h2>9. Cambios a esta política</h2>
+    <p>Si cambiamos esta política, publicaremos la nueva versión en esta página con su fecha de vigencia y lo avisaremos dentro de la app cuando el cambio sea importante.</p>
+  </section>
+</main>
+<footer>© 2026 Juan Abel Reyna Gonzales · Marcaya</footer>
+</body>
+</html>

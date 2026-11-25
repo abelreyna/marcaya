@@ -1,4 +1,4 @@
-﻿package com.juanreyna.registrotiempo.ui.ajustes
+package com.juanreyna.registrotiempo.ui.ajustes
 
 import android.content.Intent
 import android.net.Uri
@@ -74,7 +74,8 @@ import com.juanreyna.registrotiempo.ui.theme.TextoSecundario
 private const val CORREO_AUTOR = "abel.reynago@gmail.com"
 /** WhatsApp del propietario en formato internacional (Perú +51), sin "+" ni espacios, como lo exige wa.me. */
 private const val WHATSAPP_PROPIETARIO = "51943402706"
-private const val URL_REPOSITORIO = "https://github.com/abelreyna/Registro_Personal"
+private const val URL_REPOSITORIO = "https://github.com/abelreyna/marcaya"
+private const val URL_PRIVACIDAD = "https://abelreyna.github.io/marcaya/privacidad.html"
 
 @Composable
 private fun Grupo(titulo: String, contenido: @Composable () -> Unit) {
@@ -131,6 +132,10 @@ fun AjustesScreen(
                 )
                 HorizontalDivider(color = Borde)
                 Opcion(Icons.Default.Description, "Términos y condiciones") { terminos = true }
+                HorizontalDivider(color = Borde)
+                Opcion(Icons.Default.Security, "Política de privacidad", "Qué datos usamos y cómo los protegemos") {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(URL_PRIVACIDAD))) }
+                }
                 HorizontalDivider(color = Borde)
                 Opcion(Icons.AutoMirrored.Filled.HelpOutline, "Soporte técnico", CORREO_AUTOR) {
                     runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$CORREO_AUTOR"))) }
