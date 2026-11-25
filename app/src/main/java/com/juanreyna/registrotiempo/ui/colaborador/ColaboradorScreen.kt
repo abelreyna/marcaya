@@ -38,7 +38,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.PunchClock
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Settings
@@ -211,7 +211,7 @@ fun ColaboradorScreen(
             },
             pie = {
                 NavInferior(
-                    listOf(Triple("Marcaje", Icons.Default.Fingerprint, 0), Triple("Historial", Icons.Default.History, 1), Triple("Justificar", Icons.Default.Description, 2)),
+                    listOf(Triple("Marcaje", Icons.Default.PunchClock, 0), Triple("Historial", Icons.Default.History, 1), Triple("Justificar", Icons.Default.Description, 2)),
                     pestana, { pestana = it }
                 )
             }
