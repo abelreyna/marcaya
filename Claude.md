@@ -2,7 +2,7 @@
 
 ## 1. Información General del Proyecto
 
-* **Nombre de la Aplicación:** Registro de Tiempo de Personal
+* **Nombre de la Aplicación:** **Marcaya** ("Marca tu asistencia en un segundo") — antes "Registro de Tiempo de Personal" (se conservan el paquete `com.juanreyna.registrotiempo` y el repositorio).
 * **Versión:** 1.0.0
 * **Autor y Desarrollador Principal:** **Juan Abel Reyna Gonzales — Ingeniero Industrial**
 * **Correo Electrónico de Contacto:** `abel.reynago@gmail.com`
