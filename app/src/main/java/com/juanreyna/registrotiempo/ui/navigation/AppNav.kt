@@ -29,6 +29,12 @@ import com.juanreyna.registrotiempo.ui.login.FirebaseSinConfigurarScreen
 import com.juanreyna.registrotiempo.ui.login.LoginScreen
 import com.juanreyna.registrotiempo.ui.login.RegistroScreen
 import com.juanreyna.registrotiempo.ui.perfil.PerfilScreen
+import com.juanreyna.registrotiempo.ui.ayuda.GuiaUsoScreen
+import com.juanreyna.registrotiempo.ui.ayuda.RecorridoBienvenida
+import com.juanreyna.registrotiempo.ui.ayuda.RecorridoVisto
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 private fun rutaDe(d: Destino) = when (d) {
     Destino.Cargando -> "cargando"
@@ -55,6 +61,16 @@ fun AppNav(sesion: SesionViewModel = hiltViewModel()) {
     val estado by sesion.estado.collectAsStateWithLifecycle()
     val nav = rememberNavController()
     val activity = LocalContext.current as Activity
+    val esAdmin = estado.destino is Destino.Admin
+    // Recorrido de bienvenida: una sola vez por cuenta, al entrar por primera vez a su pantalla principal.
+    val uidPrincipal = when (val d = estado.destino) { is Destino.Admin -> d.uid; is Destino.Colaborador -> d.uid; else -> "" }
+    var recorrido by remember { mutableStateOf<Boolean?>(null) } // null = mostrar si está pendiente
+    LaunchedEffect(uidPrincipal) { recorrido = null }
+    val mostrarRecorrido = uidPrincipal.isNotBlank() && (recorrido ?: RecorridoVisto.pendiente(activity, uidPrincipal))
+    if (mostrarRecorrido) {
+        val cerrar = { RecorridoVisto.marcar(activity, uidPrincipal); recorrido = false }
+        RecorridoBienvenida(esAdmin, alVerGuia = { cerrar(); nav.navigate("guia") }, alCerrar = cerrar)
+    }
 
     // Al cambiar el destino raíz (login, registro, panel) se limpia la pila
     LaunchedEffect(estado.destino) {
@@ -102,11 +118,13 @@ fun AppNav(sesion: SesionViewModel = hiltViewModel()) {
                 alAcercaDe = { nav.navigate("acerca") },
                 alVip = { nav.navigate("vip") },
                 alCerrarSesion = { sesion.cerrarSesion(activity) },
-                esAdmin = estado.destino is Destino.Admin,
+                esAdmin = esAdmin,
                 estado = estado,
-                alEliminarCuenta = { sesion.eliminarCuenta(activity) }
+                alEliminarCuenta = { sesion.eliminarCuenta(activity) },
+                alGuia = { nav.navigate("guia") }
             )
         }
+        composable("guia") { GuiaUsoScreen(esAdmin, alVolver = { nav.popBackStack() }, alVerRecorrido = { recorrido = true }) }
         composable("acerca") { AcercaDeScreen { nav.popBackStack() } }
         composable("vip") {
             VipScreen(estado.vipConfig, estado.diasRestantes, estado.acceso == AccessStatus.BLOCKED_NEED_VIP) { nav.popBackStack() }

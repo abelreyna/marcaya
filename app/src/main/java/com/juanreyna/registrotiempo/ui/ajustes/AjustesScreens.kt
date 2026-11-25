@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
@@ -100,7 +101,8 @@ fun AjustesScreen(
     alVolver: () -> Unit, alPerfil: () -> Unit, alAcercaDe: () -> Unit, alVip: () -> Unit, alCerrarSesion: () -> Unit,
     esAdmin: Boolean = false,
     estado: com.juanreyna.registrotiempo.ui.EstadoSesion = com.juanreyna.registrotiempo.ui.EstadoSesion(),
-    alEliminarCuenta: () -> Unit = {}
+    alEliminarCuenta: () -> Unit = {},
+    alGuia: () -> Unit = {}
 ) {
     var eliminar by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -122,6 +124,12 @@ fun AjustesScreen(
                 }
             }
             Grupo("Ayuda y Soporte") {
+                Opcion(
+                    Icons.AutoMirrored.Filled.MenuBook, "Guía de uso",
+                    if (esAdmin) "Manual del Administrador: paso a paso y beneficios" else "Manual del Colaborador: cómo marcar, pagos y justificaciones",
+                    alGuia
+                )
+                HorizontalDivider(color = Borde)
                 Opcion(Icons.Default.Description, "Términos y condiciones") { terminos = true }
                 HorizontalDivider(color = Borde)
                 Opcion(Icons.AutoMirrored.Filled.HelpOutline, "Soporte técnico", CORREO_AUTOR) {
