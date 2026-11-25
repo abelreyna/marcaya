@@ -1,6 +1,10 @@
 <div align="center">
 
-# Registro de Tiempo de Personal
+<img src="docs/branding/marcaya_logo.png" width="140" alt="Logo de Marcaya">
+
+# Marcaya
+
+*Marca tu asistencia en un segundo.*
 
 **Control de asistencia para Android con validación facial, geocercas GPS y cálculo de pagos según la ley peruana.**
 
