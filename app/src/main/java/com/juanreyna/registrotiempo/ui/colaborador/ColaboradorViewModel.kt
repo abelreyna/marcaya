@@ -205,5 +205,16 @@ class ColaboradorViewModel @Inject constructor(
         if (delta < 0) Fechas.mesAnterior(it) else if (it == Fechas.mesActual()) it else Fechas.mesSiguiente(it)
     }
 
+    // Notificaciones de descuento que el colaborador ya marcó como leídas
+    private val prefsLeidas = context.getSharedPreferences("notif_leidas", Context.MODE_PRIVATE)
+    val descuentosLeidos = MutableStateFlow(prefsLeidas.getStringSet("desc_$uid", emptySet()).orEmpty().toSet())
+
+    fun marcarDescuentosLeidos(ids: Collection<String>) {
+        if (ids.isEmpty() || descuentosLeidos.value.containsAll(ids)) return
+        val nuevas = (descuentosLeidos.value + ids).let { if (it.size > 1000) it.toList().takeLast(1000).toSet() else it }
+        descuentosLeidos.value = nuevas
+        prefsLeidas.edit().putStringSet("desc_$uid", nuevas).apply()
+    }
+
     fun consumirMensaje() { mensaje.value = null }
 }

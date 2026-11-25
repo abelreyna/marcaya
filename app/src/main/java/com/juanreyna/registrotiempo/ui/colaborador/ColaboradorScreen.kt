@@ -1,5 +1,7 @@
 package com.juanreyna.registrotiempo.ui.colaborador
 
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoneyOff
 import androidx.compose.material.icons.filled.TableChart
 import com.juanreyna.registrotiempo.domain.calc.ReporteCostos
@@ -177,6 +179,19 @@ fun ColaboradorScreen(
         return
     }
 
+    val leidos by vm.descuentosLeidos.collectAsStateWithLifecycle()
+    val sinLeer = ui.descuentos.filter { it.id !in leidos }
+    var verNotificaciones by remember { mutableStateOf(false) }
+    if (verNotificaciones) {
+        val mon = ui.empresa?.moneda?.simbolo ?: "S/"
+        NotificacionesDescuento(
+            sinLeer, mon,
+            alMarcarLeido = { vm.marcarDescuentosLeidos(listOf(it.id)) },
+            alMarcarTodo = { vm.marcarDescuentosLeidos(sinLeer.map { it.id }); verNotificaciones = false },
+            alCerrar = { verNotificaciones = false }
+        )
+    }
+
     val primerNombre = ui.usuario?.nombre?.substringBefore(" ")?.ifBlank { null }
     val titulos = listOf(primerNombre?.let { "Hola, $it" } ?: "Registrar Marcaje", "Mi Historial de Pagos", "Justificar Incidencia")
     Box(Modifier.fillMaxSize()) {
@@ -186,7 +201,14 @@ fun ColaboradorScreen(
             avatar = if (pestana == 0) ui.usuario?.nombre ?: "?" else null,
             avatarFoto = ui.usuario?.foto.orEmpty(),
             alTocarAvatar = alPerfil,
-            acciones = { IconButton(onClick = alAjustes) { Icon(Icons.Default.Settings, "Ajustes", tint = Color.White) } },
+            acciones = {
+                IconButton(onClick = { verNotificaciones = true }) {
+                    androidx.compose.material3.BadgedBox(badge = {
+                        if (sinLeer.isNotEmpty()) androidx.compose.material3.Badge { Text(if (sinLeer.size > 99) "99+" else "${sinLeer.size}") }
+                    }) { Icon(Icons.Default.Notifications, "Notificaciones", tint = Color.White) }
+                }
+                IconButton(onClick = alAjustes) { Icon(Icons.Default.Settings, "Ajustes", tint = Color.White) }
+            },
             pie = {
                 NavInferior(
                     listOf(Triple("Marcaje", Icons.Default.Fingerprint, 0), Triple("Historial", Icons.Default.History, 1), Triple("Justificar", Icons.Default.Description, 2)),
@@ -242,15 +264,6 @@ private fun PestanaMarcaje(vm: ColaboradorViewModel, ui: UiColaborador, bloquead
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (porJustificar > 0) AvisoIncidencias(porJustificar, alJustificar)
-        // Descuentos aplicados por el empleador en los últimos 7 días (solo lectura)
-        val hace7 = Fechas.fechaDe(ui.ahora - 7L * 24 * 60 * 60 * 1000)
-        ui.descuentos.filter { it.fecha >= hace7 }.take(3).forEach { d ->
-            TarjetaAviso(
-                Icons.Default.MoneyOff, "Descuento aplicado: ${d.concepto} (−${dinero(mon, d.monto)})",
-                "${if (d.fecha == Fechas.hoy()) "Hoy" else Fechas.fechaCorta(d.fecha)} · ${d.motivo}\nAplicado por tu empleador.",
-                color = Rojo, tinte = RojoTinte
-            )
-        }
         if (!diaLaborable && ui.marcajesHoy.isEmpty()) TarjetaAviso(
             Icons.Default.EventBusy, "Hoy no es día laborable",
             "Tu horario es ${ui.usuario.horario.diasTexto()}. Si te toca trabajar hoy, pide a tu administrador que habilite este día.", Ambar
@@ -422,30 +435,13 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
                             if (d.minutosExcesoDescanso > 0) ChipSimple("Exceso desc. ${d.minutosExcesoDescanso} min", Rojo)
                             if (d.minutosExtra > 0) ChipSimple("Extra ${Fechas.duracion(d.minutosExtra)}", Teal)
                         }
-                        descDia.forEach { x -> Text("Descuento: ${x.concepto} −${dinero(mon, x.monto)}", Modifier.padding(top = 4.dp), color = Rojo, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold) }
+
                     }
                 }
             }
         }
         if (r.dias.isEmpty()) item { TextoCentrado("Sin registros en este mes.") }
-        if (r.descuentos.isNotEmpty()) item {
-            Seccion("Descuentos de mi empleador", borde = Borde) {
-                r.descuentos.sortedByDescending { it.fecha }.forEach { x ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Icon(Icons.Default.MoneyOff, null, tint = Rojo, modifier = Modifier.padding(top = 2.dp).size(20.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(x.concepto, fontWeight = FontWeight.SemiBold)
-                            Text("${Fechas.fechaCorta(x.fecha)} · ${x.motivo}", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-                        }
-                        Text("−${dinero(mon, x.monto)}", color = Rojo, fontWeight = FontWeight.Bold)
-                    }
-                }
-                HorizontalDivider(color = Borde)
-                FilaDato("Total descontado", "−${dinero(mon, r.totalDescuentosEmpleador)}", destacado = true, colorValor = Rojo)
-                Text("Los descuentos los aplica tu empleador y ya están restados en tu boleta.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-            }
-        }
+
         item {
             val b = r.boleta
             Seccion("Mi Boleta de Pago — ${Fechas.etiquetaMes(mes)}", borde = Borde) {
@@ -483,3 +479,44 @@ private fun PestanaHistorial(vm: ColaboradorViewModel, ui: UiColaborador) {
 }
 
 
+
+/** Notificaciones de descuentos aplicados por el empleador: solo informan; cada una se marca como leída. */
+@Composable
+private fun NotificacionesDescuento(
+    sinLeer: List<com.juanreyna.registrotiempo.domain.model.Descuento>, mon: String,
+    alMarcarLeido: (com.juanreyna.registrotiempo.domain.model.Descuento) -> Unit, alMarcarTodo: () -> Unit, alCerrar: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = alCerrar,
+        title = { Text("Notificaciones", fontWeight = FontWeight.Bold, color = AzulMarino) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (sinLeer.isEmpty()) Text("No tienes notificaciones nuevas.", color = TextoSecundario)
+                sinLeer.forEach { d ->
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(RojoTinte).padding(start = 14.dp, top = 12.dp, end = 6.dp, bottom = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(Icons.Default.MoneyOff, null, tint = Rojo, modifier = Modifier.padding(top = 2.dp).size(22.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Se aplicó un descuento de ${dinero(mon, d.monto)}", fontWeight = FontWeight.Bold, color = Color(0xFF7A1F1C))
+                                Text("${d.concepto} · ${Fechas.fechaCorta(d.fecha)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                if (d.motivo.isNotBlank()) Text(d.motivo, style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                            }
+                        }
+                        androidx.compose.material3.TextButton(onClick = { alMarcarLeido(d) }, modifier = Modifier.align(Alignment.End)) {
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Marcar como leído")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = if (sinLeer.size > 1) alMarcarTodo else alCerrar) {
+                Text(if (sinLeer.size > 1) "Marcar todas como leídas" else "Cerrar")
+            }
+        },
+        dismissButton = if (sinLeer.size > 1) ({ androidx.compose.material3.TextButton(onClick = alCerrar) { Text("Cerrar") } }) else null
+    )
+}
